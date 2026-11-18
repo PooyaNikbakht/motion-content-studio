@@ -1,231 +1,137 @@
 # Motion Content Studio
 
-The product was renamed from Motion Books Studio to Motion Content Studio. The intended GitHub repo name is `motion-content-studio` (this folder name is unchanged). Internal resource names keep the old name on purpose: the D1 database `motion-books` and the R2 bucket `motion-books-audio` (renaming the D1 name would orphan local state), as do the `mbs-*` storage keys and the `mbs-project` file format.
+Turn a book into a finished video kit: an AI Director writes the script, scenes and reels, and the app turns them into narration audio, a visual board, covers and publishing text.
 
-A browser app for a book-documentary channel. Paste the full conversation with your AI director and it splits the reply into audio chunks, turns them into numbered narration files with ElevenLabs, and lays out the image prompts, animation prompts, covers, publishing text and 9:16 reels as a board with one-click copy. It is a real tool I use myself, and it doubles as a portfolio demo.
+[Live demo](https://motioncontent.pooya.website/demo) | [Case study](https://pooya.website/work/motion-content-studio) | [Docs](#documentation)
 
-The two modes store data differently. **`/demo` is 100% local** (IndexedDB in your browser, no `/api` calls). **In `/app` the server is the only source of truth**: projects, folders, progress and project info live in Cloudflare D1, generated audio lives in R2, and a project is loaded from the server every time it is opened, with no copy kept in the browser and no offline mode. Edits are saved with an explicit **Save** button (Ctrl/Cmd+S). The ElevenLabs key and settings stay in `localStorage`, and audio requests go straight from the browser to ElevenLabs, never through the Worker.
+![Motion Content Studio: the audio screen](docs/images/audio.png)
 
-## Modes
+## What it does
 
-| Route | What it is | Sign-in | Audio | Storage names |
-|---|---|---|---|---|
-| `/` | Landing page with "Open the app" and "Try the demo" | none | none | none |
-| `/format` | Input format guide: sections and labels the parser reads, a copyable template, a live checker (runs the real parser in the page, nothing uploaded) and a hand-off that loads the template into the app or demo paste box (`?from=app` or `demo`, via localStorage `mbs_<mode>:pending_text`) | none | none | none |
-| `/demo` | Full flow on fictional sample content, with a banner saying so | none | simulated: short generated WAV tones, no API calls | IndexedDB `mbs_demo_db`, localStorage `mbs_demo:*` |
-| `/app` | The real app | password (Worker) | ElevenLabs, with your own key | Server: D1 + R2 via `/api`. Browser: localStorage `mbs_app:*` (settings, nav, current project id) and IndexedDB `mbs_app_cache_db` for File System Access folder handles only. The old `mbs_app_db` is only read once by the migration dialog (the stores in `mbs_app_cache_db` from the former cache and outbox are no longer read; unsent outbox entries from before this change are not sent) |
+| Step | You do | The app produces |
+|---|---|---|
+| 1 | Add a book (PDF, title or summary) and press Auto-Run, or paste an existing conversation | The director conversation, parsed live |
+| 2 | Review the narration | Audio chunks, ready for ElevenLabs |
+| 3 | Generate voice | Numbered MP3 files with credit and cost estimates |
+| 4 | Work through the board | 16:9 image prompts and animation prompts, one card each |
+| 5 | Pick a cover | Thumbnail prompt, cover headline, YouTube title, caption |
+| 6 | Plan the shorts | Three 9:16 reels with audio, images and covers |
 
-The two modes share one codebase (`public/static/`). Only the HTML shell sets `window.MBS_MODE`. The UI talks to a storage adapter (`store.js` documents the interface): `/demo` uses the local adapter, `/app` uses `remote-store.js` (`MBSRemoteStore`), which is the only script that calls `/api` and is never loaded by `/demo` (a test checks this). Because the storage names differ, the demo can never read or overwrite real projects or the real key.
+## The AI Director pipeline
 
-### How `/app` saves
-
-- **Load.** The app starts by listing summaries (`GET /api/projects`: id, name, folder, status, dates, `version`) and opening a project is always `GET /api/projects/:id`. Nothing is read from a local copy; a failed load shows an error with Retry.
-- **Save bar.** A slim sticky bar at the top of the content (always visible while scrolling, one place only, `#savebar`) holds the status (check and "All changes saved", amber dot and "Unsaved changes", "Saving...", or the error) and the Save button; it stays thin when clean and grows slightly when dirty. Any edit to the open project (chips, notes, Overview fields, director settings, language, text typed in the paste box) marks it unsaved and nothing is sent until Save (or Ctrl/Cmd+S). States: disabled when clean, Saving..., Saved, and on failure an error message with Retry (a 401 adds a sign-in link). Unparsed text in the paste box counts as unsaved; Save runs Parse on it first. On the Setup tab the same bar is labelled "Setup" and saves Setup (keys, voice, model, rates, routing, plus a Master Prompt edit in progress). `ui.js`: `saveProject()` marks, `persist()` sends, saves are queued one at a time.
-- **Immediate actions** (they send the whole open project, so unsaved edits go with them): Parse (after the replace confirm) and Undo parse, each director reply as it arrives (and the run's final state), each generated audio file and queue state, each media upload and removal. Rename and move use `PATCH` (name, folder, status only). Creating, deleting, importing, folder changes and share create/revoke also act at once.
-- **Versions and conflicts.** `projects.version` (migration `0006_project_version.sql`) is bumped by every write. `PUT` sends `baseVersion` and the server answers 409 `{ error, version }` when it is stale; `overwrite: true` skips the check. The bar then shows "This project changed elsewhere. Reload to get the latest, or overwrite" with Reload latest and Overwrite. `PATCH` returns the new version; if another save moved it in between, the stale local version is kept on purpose so the next Save reports the conflict.
-- **Leaving.** `beforeunload` warns while there are unsaved changes, a save or an upload is in flight, or a run is going. Opening, creating or importing another project with unsaved changes asks Save / Discard / Cancel.
-- **/demo** is unchanged: it has no save bar and still writes each edit to the browser as it happens.
-- One-time migration: if the old local database has projects, a dialog offers to upload them (folders, projects, then audio, paced under the rate limit). Existing server projects with a newer `updatedAt` are kept, over-cap items are listed with an Export button, and the old copy stays until you click "Remove local copies".
-- **Export / Import project** (both modes): a project exports as `<name>.mbsproj.zip` (`project.json` plus `audio/<key>.mp3|wav`) from the project row "..." menu; "Import project" always creates a copy with a new id (zip up to 200 MB, `project.json` up to 1.5 MB).
+```mermaid
+flowchart LR
+  S1["1 Architecture"] --> S2["2 Script chapters"]
+  S2 --> S3["3 16:9 scenes"]
+  S3 --> S4["4 Animations and audio chunks"]
+  S4 --> S5["5 Thumbnail, cover, title, caption"]
+  S5 --> S6["6 Reels and covers"]
+  S4 --> O1["Audio"]
+  S3 --> O2["Visual board"]
+  S5 --> O3["Cover and SEO"]
+  S6 --> O4["Reels kit"]
+  O1 --> O5["Asset download"]
+  O2 --> O5
+  O3 --> O5
+  O4 --> O5
+```
 
 ## Features
 
-0. **Overview.** A per-project page (top row, next to Import & Parse, `#overview`): status (Draft, In production, Ready, Published), publishing info (title, channel, notes, YouTube link, publish date, one link and platform per reel; https links only), created and updated dates and a checklist summary. A "Mark as Ready?" banner appears when every audio, image, video and cover item is ticked. Projects with parsed content open here; empty ones open on Import. Sidebar rows show a status dot and label.
-1. **Import & Parse.** The paste box is a draft: typing only shows a read-only **Preview**, and nothing in the project changes until you press **Parse** (or Ctrl/Cmd + Enter). A badge says Not parsed yet / Text changed since last parse / Parsed. If the project already has ticks, audio or publishing info, a confirm dialog lists what will change (new, edited, removed chunks, scenes and reels); unchanged chunks, scenes and reels keep their progress, edited ones lose it, and audio that no longer matches its text is marked outdated (never deleted). After a replace there is an Undo toast and an "Undo last parse" link, plus a dismissible "Changes since last parse" panel; the last 5 parse summaries are kept in `project.ext.history`. Load sample, Use this template and Clear use the same flow. Big paste box, content language selector (auto-detect by default), optional output folder (File System Access API, feature-detected), stats for audio chunks, image scenes, animations, Reels (9:16) and reel audio, and a character count per chunk. The screen uses the same step pattern: 1 Language and start phrase (with the output folder row), 2 Paste the conversation (textarea, Load sample, Input format guide, Clear), 3 Parsed result.
-2. **Navigation.** Main tabs in two rows: Overview, Setup and Import & Parse on top, and the two workspaces, YouTube (16:9) and Reels (9:16), nested in a lighter second row under it. Both rows are visible on every screen; before anything is parsed the workspace tabs look disabled but stay clickable and show an empty state with a link back to Import. The workspace tabs have a small ratio badge and one aggregate progress badge each (images, videos, covers and audio). YouTube has three sub-tabs, Audio, Visual Board and Cover & SEO; Reels has one sub-tab per reel (Reel 01, 02, 03) and, inside each reel, the same sub-tab pattern: Audio, Visual Board and Cover & Captions, each with a small progress badge (for example 0/1, 3/4, 0/1). The reel tabs and the section tabs share one attached panel (the selected reel tab connects to it like a folder tab; the section tabs sit in its top strip), and YouTube's section tabs use the same panel. The last main tab, the last YouTube sub-tab, the last reel and the last reel section are remembered per mode (localStorage), and the URL hash mirrors them so links work and Back behaves: `#setup`, `#import`, `#youtube/audio`, `#youtube/board`, `#youtube/covers`, `#reels/1` (Audio, the default), `#reels/1/visual`, `#reels/1/cover`. The sub-tab you pick stays when you switch reels. Only one audio queue runs at a time; while one runs, a one-line status with Stop shows in every other tab. With no reels parsed, the Reels tab shows an empty state with a link to the format guide.
-3. **YouTube (16:9).**
-   - **Audio.** One shared screen (`audioWorkflowHtml` in `ui.js`): a compact **status line** (Ready, or "Needs API key and voice ID", a one-line summary and an "Open Setup" button), then **1 Generate** and **2 Review and save**. There is no Set up card here any more: every global setting lives once in the **Setup** tab. **1 Generate** is the raised card: a chip line with the settings the next run uses ("eleven_v3 · Voice 21m00... · Stability 0.5 (Natural)") and an **Edit** button that opens "Settings for this run only" (model dropdown, stability, voice ID, a live estimate, Apply and Reset to defaults; the overrides last for the open page session, show a "Custom for this run" chip with a Clear link, and never change the Setup defaults), the primary button (main chunks only here; "Generate all reel audio" in Reels), Generate everything, Retry failed, the batch estimate (credits, USD and, when known, credits left), the fix list, progress, Save all to folder and Download ZIP. While setup is incomplete the button looks blocked and an inline reason with "Open Setup" goes to `#setup` and focuses the first missing field (also from Generate everything and the Reels audio view). **2 Review and save** lists one `itemCardHtml` card per item (title, character count and status pill in the header; the script with warm-up phrase dimmed, 3-line clamp and per-line direction; two estimate lines that are always there, "First 10 s: ~170 chars, ~170 credits, ~$0.01" with the Preview first 10 s button beside it and "Full chunk: 286 chars, 286 credits, ~$0.02", computed with the effective model and your editable rates; once generated, "Generated with eleven_v3, stability 0.5"; the footer has Generate or Regenerate with a caret for "Generate with different settings..." (that one file uses another model, stability or voice, recorded in its audio metadata) and Save to folder; the player under it), with the Dim warm-up toggle now in Setup. A sequential queue with a 2 second gap, per-item status (Waiting, Generating..., Saved to disk, Error), Stop and Resume, retries and a ZIP fallback; audio is kept in IndexedDB in /demo and in R2 in /app, so a reload keeps it. Settings and folder are one shared state across both screens.
-   - **Visual Board.** One full-width card per scene, built by the shared `itemCardHtml` (the same card is used for reel images, reel animations, reel and YouTube covers and the publishing text cards: always one card per row, never a multi-column grid). Header: title, 16:9 or 9:16 badge, a small Flow pill (Flow scenes only) and the status pill on the right. Body: narration in the content language, then the prompt box (image and video prompts side by side on desktop for Flow scenes, stacked on mobile). Footer, in one row: Copy (one per prompt for Flow scenes), then the progress toggles (Image, Video for Flow scenes, Audio generated), and the left border colour follows the status. Audio chunk cards keep their own layout because they carry a player. A sticky bar shows Images, Videos, Audio and total progress, with All / To do / Done filters, "Only Flow scenes". Progress is saved in the project (IndexedDB) by scene number and survives reloads and re-parses; only scenes that no longer exist lose their state. Audio is a manual toggle because audio chunks and scenes do not map one to one. The sub-tab badge and the Import tab show overall progress.
-   - **Cover & SEO.** The main 16:9 YouTube video only: the YouTube cover card at full width (ratio badge, prompt with Copy that never wraps, a "Cover generated" chip stored as `thumbnailDone`) and a "Publishing text" section with the cover headline, YouTube title and video caption as copyable cards (content-language direction, so Persian is RTL); anything not found is hidden. The ZIP includes `covers_and_seo.txt` (main items only).
-4. **Reels (9:16).** Step 6 of the conversation: three independent vertical reels. Nothing global sits above the tabs; each sub-tab carries its own toolbar. Audio: the same three-step screen as YouTube > Audio ("Generate all reel audio" runs the same queue for the 3 reels, "x of 3 reel audio ready"), with the open reel's audio card and quick links to the other reels. Visual Board: progress for images and videos. Cover & Captions: the cover progress. Per reel: **Audio** (the reel's script with the warm-up phrase dimmed, character count, Generate or Regenerate, status line such as "Saved to Reels/Reel_01_audio.mp3", player, Save to folder), **Visual Board** (3 to 4 vertical image cards labelled `R01-01`, `R01-02` with narration, Copy and an "Image generated" chip, then 1 to 2 vertical Flow animation cards with Copy and a "Video generated" chip) and **Cover & Captions** (the 9:16 cover prompt with Copy and a "Cover generated" chip, then the reel's Cover headline and Caption as copyable cards in content-language direction, hidden when the reel has none). Audio is saved as `Reel_01_audio.mp3` and so on in a `Reels` subfolder of the chosen folder, or under `Reels/` in the ZIP; `Reels/Reel_NN_prompts.txt` has the audio script, prompts, cover prompt, headline and caption. Image and video progress is stored per prompt (`img1`, `vid2`; older `image`/`video` flags still count), the cover as one `cover` flag, audio is derived from the generated file, and everything is merged on re-parse.
-
-**Dim warm-up phrase.** A toggle (default on, saved per mode in localStorage) renders the configured start phrase at the start of chunk rows, Visual Board narration and reel audio as a muted span. It is display only: the text sent to ElevenLabs and the character counts are unchanged (`MBSParser.splitWarmup`).
-5. **Projects sidebar.** A left sidebar (300px, hide/show toggle remembered per mode; an off-canvas drawer under 900px) lists folders (one level deep) and projects, with a count, search, a primary New project button and New folder / Import buttons; rows show a status dot, and the project name is the page title above the tabs (click it or the pencil to rename in place). Each item has a "..." menu: Rename, Move to... (folders or No folder) and Delete; a folder menu has New project here, Rename and Delete folder (its projects move to the top level, never deleted). Drag a project onto a folder to move it. Folders sort A to Z, projects by last update; search filters by name and expands matching folders. Keyboard: arrow keys move, Right/Left expand/collapse, Enter selects, Shift+F10 or the Menu key opens the menu, F2 renames. Each project keeps its own language, pasted text, parsed result and audio.
-
-### Content language
-
-The interface is English and left to right. Pasted and generated text can mix scripts (an English "Director:" intro and "Step 1" labels around Persian narration), so the paste box, chunk text, narration, headlines and captions use `dir="auto"` with `unicode-bidi: plaintext`: every line or paragraph picks its own direction (Persian lines RTL, English lines LTR) and aligns to its start. The per-project content language only chooses the font: Persian, Arabic and Urdu use Vazirmatn. Image, video and thumbnail prompts are always LTR monospace. Persian, Arabic, Hebrew and Urdu are supported in the code; the public pages, the demo and the sample are English only and contain no Arabic-script text (`tests/no-arabic-script.test.js` enforces it; the parser's Persian and Arabic keywords are written as `\uXXXX` escapes). Persian fixtures exist only under `tests/`.
-
-## Automation upgrades
-
-- **Setup tab.** `#setup`, next to Overview: ElevenLabs API key and voice ID (key stored only in this browser), default model and stability (v3 snaps to 0, 0.5, 1), the editable credit rates and USD per 1,000 characters per model, the plan panel (credits used and left, reset date, Refresh; in `/demo` it says the Free plan of 10,000 credits a month is an estimate), the output folder (choose, clear, File System Access status) and the Dim warm-up phrase toggle. The chunk start phrase stays in Import & Parse step 1 with the language; in `/app` it has no built-in default (`settings.startPhrase`, empty until you set it, saved per browser), in `/demo` it falls back to the English sample phrase.
-- **Cost and plan estimate (Audio > Generate).** `estimate.js` counts characters like `audio.js` and turns them into credits and a pay-as-you-go price. The rates are editable in Set up (defaults: 1 credit per character for v3 and Multilingual v2, 0.5 for Flash v2.5; about $0.08 and $0.04 per 1,000 characters), and everything shown from them is an estimate. In `/app` with a saved key the line also reads `GET /v1/user/subscription` (`character_count`, `character_limit`, `next_character_count_reset_unix`, cached in `sessionStorage` for 5 minutes) and warns when the batch is larger than what is left; if the plan cannot be read it says "estimate only". `/demo` shows "Estimate (assumes the Free plan, 10,000 credits a month)". A new `eleven_v4` (10,000 characters) is listed in the ElevenLabs model overview but is not added: its stability rules are not documented, so it needs a live check first. Flash v2.5 (40,000 characters) is added.
-- **Fix before generating.** `quality.js` checks the parse for chunks over the model limit, a missing warm-up phrase, empty image, video and cover prompts, duplicate scene numbers, Latin words in Persian narration (v3 `[tags]` ignored) and reels without audio, images or a cover. The list is collapsible, each line has a jump link, and it never blocks Generate.
-- **Per chunk.** Each audio card shows characters and credits, "Estimate for this chunk" and "Preview first 10 s" (only the warm-up phrase plus the first sentence, about 170 characters, is generated; the audio stays in memory and is never stored; the button shows its cost). "Retry failed (n)" reruns only the items that failed; their keys are kept in `project.ext.queue.failed`.
-- **Director Prompt vault.** The "Director Prompt" button in the header opens a dialog with your Master Director Prompt: read view (per-line direction), character count, Copy Master Prompt, Edit / Save / Cancel, Reset to default and Set current as my default. In `/app` it is stored on the account (`GET` and `PUT /api/settings/director-prompt`, D1 table `settings`, migration `0004_settings.sql`, 100 KB cap, same auth, origin and `X-MBS` guards) and read from the server every time (no local copy; a failed load shows Retry); first run is empty with the editor open. The prompt itself is never part of the repository or any file under `public/`. `/demo` makes no server calls and shows a short fictional template that you can edit locally.
-- **Guide.** A "Guide" button in the header (next to Director Prompt, in both `/app` and `/demo`) opens a full-height dialog "How to use Motion Content Studio" with a "Where to start" callout and seven numbered sections (Setup, Import & Parse, YouTube Audio, Visual Board, Cover & SEO, Reels, Assemble and publish), each with "What the app does here", "What you do in other tools" and "Recommended for this step" (labelled as suggestions). All wording, including the recommendations, is one data object in `public/static/guide.js` (`window.MBSGuide`); the demo adds short "In the demo" notes. A small "?" beside each tab title and an "Open full guide" button on the How it works card open the dialog at the matching section. The landing page "How it works" mirrors the same flow. Tests: `tests/guide-ui.test.js`.
-- **How it works.** A collapsible three-step card at the top of Import & Parse (Get the Director Prompt, Generate the Book Package, Paste and Produce). Expanded for a project with nothing parsed, collapsed once it has content; your choice is remembered per mode.
-- **AI Director mode (Import & Parse).** A toggle at the top of Import & Parse chooses "AI Director (Auto-Generate)" or "Paste Conversation" (the original screen, unchanged); the choice is saved per project. AI Director runs your Master Director Prompt on Gemini from the browser: pick the output language, add the book as a PDF and/or a title or summary, then Start Project (first turn), Next Step (sends the Persian word for "continue" once) or Auto-Run All 6 Stages with Pause, Resume and Stop. Auto-Run stops when three reels have covers and captions, when the reply contains the closing congratulation word, at the max turn count (default 45, editable), or when the director asks a question that "continue" does not answer (an answer box appears). After every reply the conversation is re-parsed into the project (the same diff and carry as a manual parse, no confirm dialog) so the YouTube and Reels tabs fill in as it goes. The conversation is saved as `project.text` in the shape of a pasted conversation (model replies whole, user turns as `---` / `You: [continue]` / `---` lines); the run state (turns, tokens, cost, stage, language, model, status) is `project.ext.director`, and a reload rebuilds the history from the text and offers Resume. Code: `gemini.js` (client), `director.js` (state machine), `director-run.js` (runner), `estimate.js` (cost).
-- **Gemini settings (Setup).** API key (this browser only, sent only to generativelanguage.googleapis.com in the `x-goog-api-key` header), default model (gemini-3.8-flash $0.75 in / $3.75 out per 1M tokens by default, gemini-4-hydrogen $1.50 / $7.50, gemini-4-carbon "best quality" $2 / $10 until 30 Nov 2026 then $4 / $20; gemini-2.5-pro and 2.5-flash stay selectable but are deprecated and may 404 for new keys; every rate is editable), temperature, editable USD per 1M token rates (with the over-200k-prompt tier) and a Test key button (lists one model). Model routing (Setup > Gemini AI Director): presets Recommended Smart Hybrid (default: Carbon for stages 1-2, Flash for stages 3-6), All Carbon, All Flash, plus a per-stage dropdown for each of the 6 stages (setting `geminiRoute`). A turn runs on the model of the stage the director is in (the stage reached by the previous reply; the first turn is stage 1). The AI Director panel has a "Model for the next stage" dropdown to switch mid-run (applies from the next turn; "Follow routing" clears it). Each turn is priced at the model that ran it: the log shows the model and cost per turn and a total with a per-model split. Cost is counted from `usageMetadata` after every turn (thinking tokens count as output); before the run the badge shows an estimate for about 25 turns (20 to 30) with the stated assumptions, because the whole history is sent again on every turn. PDFs up to 14 MB are sent inline with every turn; larger ones (to 50 MB or 1,000 pages) are uploaded once with the File API and the file URI is reused. /demo runs a simulated director on the sample conversation (about 8 turns, streamed with delays) and calls no API.
-- **Director feedback (AI Director panel).** After every stage a feedback box sends your text to the model as the next message (`runner.reply`), Regenerate drops the last reply and sends the same message again (`runner.regenerate`, tokens already spent stay counted), Edit reply lets you change the last reply and Accept edit stores it in the conversation and project (`runner.editLast`; the model sees your version from then on). "Pause after each stage" (saved per project in `ext.dirUi.pauseEach`) makes Auto-Run stop after every finished stage reply. The parser keeps the LATEST version when an "Audio chunk N" number or a scene number appears twice (a regenerated reply left in a pasted conversation): it takes the first one's place in the order. Unnumbered chunks are never merged.
-- **Collapsible Setup cards.** Every Setup card has a chevron toggle (`aria-expanded`, `aria-controls`). The choice is stored per card in this browser (localStorage key `<mode>:setupcards`). Defaults when a card has no saved choice: on a first run (no ElevenLabs or Gemini key yet, and always in /demo) every card is open; afterwards only cards that still need something (a service that is not ready, the local-copies card) are open.
-- **Master Director Prompt in Setup.** The vault also lives in Setup as a card (Edit / Save, Copy, Reset to default, Set current as my default, character and approximate token counts); the header button opens the same data in a dialog. `npm run seed:prompt` (`scripts/seed-director-prompt.mjs`) loads `.local/master-prompt.txt` (git-ignored) into the vault through the running app (`MBS_PASSWORD=... node scripts/seed-director-prompt.mjs`, local wrangler dev by default; `--remote --base https://your-app` for a deployed app, a deploy-stage step) and prints only lengths and a SHA-256.
-- **Start phrase per project.** `project.ext.startPhrase` (saved and exported with the project); the Setup value is only the default. Load sample and templates set the sample phrase for that project.
-- **Local copies.** The one-time upload of old browser-only projects only prompts for projects never uploaded and not on the server (`migrate-prompt.js`); Not now, Don't ask again and Delete local copies are in the dialog, and Setup shows a "Local copies" card while any remain.
-- **jsdom UI tests.** `tests/*-ui.test.js` load the real scripts into jsdom; set `JSDOM_PATH` to a jsdom install (they skip without it).
-
-- **Generate everything.** A button next to Generate (YouTube and Reels audio) runs main audio, then reel audio, then offers Download ZIP or Save to folder. Before it starts, a dialog shows the total estimate and the quality issues. The position is saved in `project.ext.queue` (`id`, `phases`, `phase`, `failed`, `startedAt`, and a `lock` with a tab id and heartbeat) after every item, and a panel above every tab shows the phase, counts, Stop, Resume pipeline, Retry failed and, at the end, ZIP or Save to folder. After a reload the pipeline is never started by itself: the panel only offers "Resume pipeline". A lock with a heartbeat (stale after 45 seconds) stops a second tab of the same browser from running the same project's queue. `queue.js` holds the pure state functions.
-
-- **Next action.** A "Next:" banner above every project view (`next.js`, `nextAction(proj, audioMeta)`) names the one thing to do now (generate audio, copy the next image prompt for Scene 04, generate an animation, the YouTube cover, reel audio, reel image R02-03, reel covers, mark as Ready, publish) and a Go button jumps there.
-- **Prompt lists and CSV.** The Visual Board has "Copy all image prompts" (numbered, `prompts.js`) and "Download CSV"; reel Visual Board and Cover tabs, and the YouTube cover tab, have CSV too (RFC 4180, UTF-8 with BOM, so Excel and Sheets read Persian correctly). Prompts are copied exactly as written. Older projects may still carry a `project.ext.pack` field from a removed feature; it is ignored.
-
-
-- **Media slots and Download all assets.** Every card that holds an image has an **Image** slot (YouTube scenes, reel images), every card with a video prompt a **Video** slot (Flow scenes, reel animations), and cover cards a **Cover image** slot (YouTube cover, reel covers). The slot is the media panel between the prompts and the footer. Empty, it is a compact dashed drop target ("Upload image", accepted types, 100 MB); click it or drop a file on it. Uploading shows a progress bar with Cancel (XHR, so progress is real), sends the ORIGINAL file to R2, makes a 320 px WebP thumbnail in the browser and sends it to the thumb route, ticks the matching "generated" chip, and saves `project.ext.media[itemKey] = { name, type, bytes, at, uploadedAt, sk, r2, stored, thumb }`. Filled, it shows the thumbnail (image) or an inline player with the thumbnail as poster (video), the file name, size and type, and Replace, Download (streams from R2 with the original file name), Enlarge (video) and Remove (asks first, deletes from R2, unticks the chip). Clicking a thumbnail opens a lightbox (full image from the GET route, or a video player; Esc or Close). The folder-style **bulk drop zone** at the top of each view stays: it matches names (`03.png`, `scene_04.mp4`, `R01-02.png`, `R01-V1.mp4`, `R01-cover.png`, `cover.png`) through the same pipeline and ends with a results list (added and ticked, and not added with a reason). Item keys are the scene number and reel id (`s-4-image`, `r-1-video-2`, `r-1-cover`, `yt-cover`). Each file also has `sk`, its R2 key (`media/<project>/<sk>`), fixed at the first upload with a random suffix, so renumbering never moves or overwrites a file. **Re-parse** (`diff.js carryMedia`): files follow unchanged scenes and reels (even when renumbered), edited items keep their file flagged **Outdated** (their prompt changed), and files of removed scenes, reels or covers become **unused** (`project.ext.orphans`). Nothing is deleted automatically; Overview > Files lists the unused files with sizes (plus server files no card references) and **Remove unused media** deletes them after a confirmation (`POST /api/projects/:id/media-cleanup`). `/demo` has the same slots but never calls the server: the thumbnail is kept in IndexedDB and the original too while all originals stay under 25 MB in total, with a visible "Demo: files stay in your browser" label. A project holds at most 200 files; over 2 GB in one project the upload reply warns (nothing is refused).
-  - **Media API** (`src/api.js`, D1 table `media`, `0002_media.sql`): `PUT/GET/DELETE /api/projects/:id/media/:key`, thumbnails under `/thumb/:key`; types png, jpeg, webp, mp4, webm only (415); `Content-Length` is required and checked (413 over 100 MB, which is exactly 100,000,000 bytes: 100,000,000 is accepted, 100,000,001 is rejected with a message naming the limit), and the body is streamed into R2 through a byte counter (a body longer than declared is 413, shorter is 400; nothing is buffered, and the Workers runtime goes through `FixedLengthStream`). GET sends the stored `Content-Type`, an `ETag`, `Accept-Ranges: bytes` and **Range** (206, `Content-Range`, 416; `If-Range`, `If-None-Match` 304) so a `<video>` can seek, a `Content-Disposition` with the original name (`?download=1` makes it an attachment) and `Cache-Control: private, no-cache`. The upload reply carries the account usage and `nearAllowance`.
-  - **Storage meter.** `GET /api/storage` feeds the Overview Files panel and the sidebar footer (media, thumbnails and audio bytes), with a warning near the 10 GB free allowance; the bucket is shared with other site media, so the real room left can be smaller.
-  - **Download all assets** (Overview > Files): in Chrome or Edge each file streams from R2 straight into a folder you choose (`Audio/`, `Images/`, `Video/`, `Reels/Reel_01/...`, plus `edit-list.csv` with order, scene, chunk, audio, image, video) without being held in memory. Other browsers get a ZIP built in memory, so videos over 50 MB each or past 400 MB in total are left out and listed in `NOT-INCLUDED.txt` and in the confirmation. **Workers body size assumption:** a Worker request body is capped by the plan (100 MB on Free and Pro, more on Business and Enterprise), so the 100 MB per-file cap sits at that edge limit; a file just under 100 MiB may still be refused by Cloudflare with a bare 413 before it reaches the Worker, and the UI reports it as too large.
-
-- **Read-only share link (`/app` only).** The Share button next to the project title creates a link to `/s/<token>` (`src/share.js`): 32 random bytes, only their SHA-256 is stored (the link is shown once, when created). Expiry 1, 7 (default) or 30 days; one live link per project, creating a new one turns the old one off; "Turn link off" revokes it; deleting the project removes it. The page is rendered on the server from an allowlist: image, video and cover prompts and which items are done, nothing else (no narration, audio, notes, titles, captions, publishing info or project name). It needs no login, so `wrangler.jsonc` runs the Worker first for `/s/*` and the route is answered before the auth gate. Responses carry `X-Robots-Tag: noindex, nofollow`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, a strict CSP and no JavaScript; unknown, expired and revoked tokens all answer the same 404; the route uses the same `API_LIMIT` rate limit (keyed `share:<ip>`). Routes (signed in, same-origin): `POST`, `GET`, `DELETE /api/projects/:id/shares`. Migration `0003_shares.sql`. Hidden in `/demo`.
-
-## Assumed formats
-
-The parser (`public/static/parser.js`) was written from a described format, not from a real export, so **a real paste may need small tweaks**. Rules and tolerance:
-
-| Part | Rule |
+| Feature | Details |
 |---|---|
-| Audio chunks | Every block that starts with the **chunk start phrase** (setting; the demo and the format guide use `Today the sea is very calm`, and in `/app` you set it once in Import & Parse, there is no built-in phrase) runs until the next chunk or a section marker: a heading, `---`, a code fence, a `Step N` line, a `Scene ...` line, a label such as `Image Prompt`, or an English-only line (for non-Latin start phrases). Blank lines inside a block are kept. |
-| Image scenes | `Scene Number: [XX]`, then `Narration Part: "..."`, then the English text inside the code block after `Image Prompt` (or on the same line if there is no block). |
-| Video prompts | Scenes named in the `Step 4` section (a `Scenes: 2, 5, 8` line and/or `Scene Number: [XX]` blocks), each with the code block after `Video Prompt`. Scenes in this section are not counted as image scenes. |
-| Thumbnail | In the `Step 5` section (or anywhere before Step 6 if there are no step headings): a `Thumbnail` label followed by a code block. Step 5 reel cut ideas are no longer parsed. |
-| Publishing text | Labels `Cover Headline:` (also `Reel Cover Headline`, and the Persian equivalent), `YouTube Title:` (`Video Title`, and the Persian equivalent) and `Caption:` (`Reel Caption`, `Instagram Caption`, and the Persian equivalent), bold or not, any colon (`:` `：`; optional on a label alone on its line), Persian digits allowed after the label (`Caption 1:`). The value is the text on the label line, a code block under it, or the lines under it (blank lines kept) up to the next label, heading, `---` or code fence; surrounding quotes are removed and hashtag lines are kept. Inside a `Reel NN` block of Step 6 they attach to that reel (`reel.coverHeadline`, `reel.caption`). Anywhere else the first one found is the main video's: `coverHeadline`, `youtubeTitle` and `caption` (a top-level Caption is the video caption). Step 5 `Reel N:` idea blocks are ignored. A YouTube Title inside a reel block is ignored. Missing ones are simply empty (no warning). |
-| Reels and Shorts (Step 6) | The section headed `Step 6` or `Reels and Shorts` (Persian headings work too). Audio chunks and scenes before it stay main; inside it, each `Reel 01`..`Reel 03` (also `Reel 1`, Persian labels work too) yields one audio chunk (starts with the start phrase), image prompts (code blocks, optional `Reel Scene Number: [R01-01]` label, `Scene`/`Shot`/`Image N` numbers and `Narration Part`) every code block after a `Video Prompt` label (one or two vertical animations) and a `Reel Cover Prompt:` label (also `Cover Prompt`, bold or not, colon optional, followed by a code block or plain text; a missing cover is a warning). Result: `reels = [{ id, name, audio: { text, chars }, images: [{ n, label, narration, prompt }], video: { prompt }, videos: [{ prompt }], cover: { prompt } | null }]` (`video` is `videos[0]`). The ZIP's `Reels/Reel_NN_prompts.txt` includes the cover prompt. |
+| AI Director | Runs your Director Prompt on Gemini from the browser, six stages with Auto-Run, Pause and feedback. Per-stage model routing (presets or a dropdown per stage) and a cost per turn, priced at the model that ran it |
+| Paste a conversation | A tolerant parser splits a pasted reply into chunks, scenes, animations, covers, text and reels. Re-parse keeps progress and uploaded files |
+| ElevenLabs narration | Queue with retries, per-chunk 10 second preview, credit and USD estimates, plan usage, ZIP or folder save |
+| Media | Per-card image and video uploads to R2 with 320 px thumbnails, a lightbox, bulk drop and Download all assets |
+| Share links | Read-only prompt and progress page, expiring, revocable, no login for the viewer |
+| Save bar | Explicit Save with version check and conflict detection (Reload or Overwrite) |
+| First-run password | Created once with a recovery key, PBKDF2 hash in D1, signed cookie |
+| Daily backups | Cron dump of D1 plus incremental media copy, restore script |
+| Demo mode | `/demo` runs the whole flow on fictional content, entirely in your browser |
 
-The Input format guide (`public/format/index.html`, `public/static/format.js`) documents this table for clients. Its template comes from `public/static/format-template.js`, and `tests/format.test.js` parses it with the real parser and expects the documented counts, so update the template and its `EXPECTED` counts together with any parser change. Inside the app and the demo the same guide opens as a full-width dialog (the "Input format guide" buttons in Import & Parse, the "Open format guide" link in the Import step of the Guide, the Reels empty state, or the `#format` hash): `ui.js` fetches `/format`, renders its `main` into the dialog and calls `MBSFormat.init(root, opts)` from `format.js`, so there is one copy of the text. "Use this template in my project" fills the paste box in place (asking before replacing text) and closes the dialog, and the live checker runs inside it, so the paste is never lost. `/format` stays the standalone public page.
+More detail: [docs/features.md](docs/features.md).
 
-Tolerated: fenced code blocks (``` or ~~~), optional bold markdown on labels, Persian and Arabic-Indic digits, ZWNJ and direction marks, the Arabic forms of yeh and kaf against the Persian ones, bullets, quote markers and curly quotes. Text inside code fences is never read as narration. Prompts keep only their English lines when a block mixes scripts. Warnings show on the Import tab when something looks off (no chunks, duplicate scene, missing prompt).
+## Screenshots
 
-`samples/sample-conversation.txt` is a fully fictional conversation (6 chunks, 8 scenes, 3 animations, a thumbnail with cover headline and YouTube title, and a Step 6 with 3 reels, one with two animation prompts, each with a cover prompt, a cover headline and a caption) that shows the expected shape. `public/demo/sample-conversation.txt` is a copy; run `npm run sync:sample` after editing the original (a test checks they match).
+<table>
+  <tr>
+    <td width="33%"><a href="docs/images/ai-director.png"><img src="docs/images/ai-director.png" alt="AI Director run panel"></a><br><sub>AI Director, six stages</sub></td>
+    <td width="33%"><a href="docs/images/visual-board.png"><img src="docs/images/visual-board.png" alt="Visual board scene cards"></a><br><sub>Visual board with upload slots</sub></td>
+    <td width="33%"><a href="docs/images/cover-seo.png"><img src="docs/images/cover-seo.png" alt="Cover and SEO tab"></a><br><sub>Cover and SEO</sub></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="docs/images/reels.png"><img src="docs/images/reels.png" alt="Reels tab"></a><br><sub>Reels (9:16), per reel audio</sub></td>
+    <td width="33%"><a href="docs/images/setup-gemini.png"><img src="docs/images/setup-gemini.png" alt="Gemini setup and model routing"></a><br><sub>Gemini setup and model routing</sub></td>
+    <td width="33%"><a href="docs/images/setup-elevenlabs.png"><img src="docs/images/setup-elevenlabs.png" alt="ElevenLabs setup and credit rates"></a><br><sub>ElevenLabs setup and credit rates</sub></td>
+  </tr>
+</table>
 
-## ElevenLabs notes
+The layout also works on a phone: [mobile view](docs/images/mobile.png).
 
-Checked against the ElevenLabs docs (Text to Speech, "Create speech") when this was written. Re-check if requests start failing.
+## Architecture
 
-- `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128` with an `xi-api-key` header and a JSON body `{ text, model_id, voice_settings: { stability } }`.
-- Models: `eleven_v4` (default, recommended for Persian and expressive storytelling, 10,000 characters per request, 1 credit per character), `eleven_v3` (previous generation, 5,000), `eleven_multilingual_v2` (10,000) and `eleven_flash_v2_5` (40,000, half the credits). Longer chunks are rejected before any request is sent.
-- Stability: `eleven_v3` only takes 0.0 (Creative), 0.5 (Natural) or 1.0 (Robust), so the slider snaps to those. Other models take 0 to 1 in steps of 0.05.
-- Errors: 401 (bad key) and 402 (plan or credits) and 404 (voice) stop the queue; 429 and 5xx and network errors are retried up to 3 times with growing waits; 400 and 422 report the API message.
-- Files are named `01_audio.mp3`, `02_audio.mp3`, and so on (demo files are `.wav`).
+```mermaid
+flowchart LR
+  B["Browser app /app"] -->|"cookie + /api"| W["Cloudflare Worker"]
+  D["Public /demo"] -->|"local only"| IDB[("IndexedDB")]
+  W --> DB[("D1 database")]
+  W --> R2[("R2 media bucket")]
+  CRON["Daily cron"] --> W
+  W --> BK[("R2 backup bucket")]
+  B -->|"own key"| G["Gemini API"]
+  B -->|"own key"| E["ElevenLabs API"]
+```
 
-## Security notes
+API keys stay in your browser and go straight to Gemini and ElevenLabs, never through the Worker. See [docs/architecture.md](docs/architecture.md).
 
-- **`/api/*` guards** (`src/api.js`), applied to every route in this order: not signed in gives a 401 JSON (never a redirect); a per-IP rate limit (`API_LIMIT` binding, 120 requests a minute, 429 with `Retry-After`; skipped if the binding is absent); writes need `Origin` equal to the site and the header `X-MBS: 1` (else 403); JSON routes need `application/json` and audio routes `audio/mpeg` or `audio/wav` (else 415); `Content-Length` is checked before the body is read (413 over the caps: body 1.9 MB, text 900 KB (a full AI Director run), parsed 700 KB, state + info 200 KB (together 1.8 MiB, under D1's 2 MB row limit), audio 8 MB); responses are `private, no-store`. Audio keys must match `^(\d{1,4}|reel:[\w-]{1,40})$`. Audio is stored in R2 as `audio/<projectId>/<key>.<mp3|wav>` and streamed, never zipped on the server.
-- Project data (text, prompts, publishing info) now lives on the server in D1, behind the same login. Treat the database and bucket as private.
+> **Data safety.** D1 Time Travel can rewind the database. A daily job writes a JSON dump of every table to a private backup bucket. Every media object is also copied to that bucket and never deleted there. See [docs/backups.md](docs/backups.md).
 
-- The ElevenLabs API key stays in your browser (`localStorage`) and is sent only to `api.elevenlabs.io`. Anyone with access to the browser profile can read it. Use a key with a usage limit.
-- The login protects the page only. `public/static/*` is public by design, and the app has no secrets in it.
-- Login (`src/auth.js`, `src/worker.js`): the password lives in D1 (migration `0005_auth.sql`, one row) as PBKDF2-SHA256 with a random per-install salt and 100,000 iterations (the Workers maximum; native crypto, a few ms of CPU against the 100 ms `cpu_ms` limit; `tests/auth.test.mjs` measures one hash). Compares are constant time. A correct sign-in sets an `HttpOnly`, `Secure`, `SameSite=Lax` cookie signed with HMAC-SHA256 (`SESSION_SECRET`), valid 30 days, that also carries a session epoch stored in the auth row. `/logout` clears it. Unauthenticated `/app*` redirects to `/login`.
-- First run: until a password exists, `/login` shows **Create password**. It needs the `RECOVERY_KEY` secret (constant-time compare), 10+ characters and a confirmation, and works once only (a second attempt gets 409). Without the key nobody who finds the URL first can claim the app.
-- Change password (avatar menu at the right of the header, next to Sign out; `/login?mode=change`) needs the current password. **Forgot password** (`/login?mode=forgot`) needs `RECOVERY_KEY`. Both bump the epoch, so every other session is signed out (the one that changed it stays in). Old `v1` cookies from the previous login are rejected: sign in again once.
-- Secrets are never logged or shown. `LOGIN_DELAY_MS` (optional var) overrides the failed-attempt delay; tests set it to 0.
-- Failed sign-ins, setups, changes and resets are slowed (growing delay) and locked out after 5 misses in 15 minutes per IP. The counter lives in the Worker isolate's memory, so it is best effort: add a Cloudflare rate-limiting rule on `POST /login` as well.
-- `/app` and `/login` send `noindex` and `no-store`. `robots.txt` disallows them. The landing page, `/demo` and `/format` are indexable (all three are in `sitemap.xml`).
-- Browser-side calls to ElevenLabs rely on its CORS support. If a browser or extension blocks the call, the error shows as a network error.
-
-## Run locally
+## Quick start
 
 Requires Node 22 (`.nvmrc`); Node 20+ works.
 
 ```bash
-nvm use
 npm install
-npm run gen:recovery             # writes RECOVERY_KEY and SESSION_SECRET to .local/secrets.txt and .dev.vars (git-ignored, values not printed)
-npm run db:migrate:local         # once: creates the local D1 tables (.wrangler/state)
-npm run dev                      # http://localhost:8787 (the dev server in this repo runs on 8799 via `wrangler dev --port 8799 --infer-origin-from-routes=false`; without that flag wrangler rewrites the request host to the route host, so the localhost-only Dev sign in never shows)
+npm run gen:recovery        # writes local secrets, nothing printed
+npm run db:migrate:local    # creates the local D1 tables
+npm run dev                 # http://localhost:8787
 ```
 
-- `/` , `/demo`, and `/app` (redirects to `/login` until you sign in; on first run `/login` asks you to create the password, using `RECOVERY_KEY` from `.local/secrets.txt`). `.dev.vars` needs `RECOVERY_KEY` and `SESSION_SECRET` (see `.dev.vars.example`); `npm run gen:recovery -- --force` replaces them.
-- `.dev.vars` is git-ignored. Never commit secrets.
-- **Dev sign in (local only).** With `DEV_LOGIN=1` in `.dev.vars` and the page opened on `localhost` or `127.0.0.1`, `/login` shows an extra "Dev sign in (local only)" button. It POSTs `action=dev` to `/login`, creates the password with a fixed local dev password if none exists yet (no `RECOVERY_KEY` needed; the password is never shown), and issues the normal session cookie. With the flag unset or on any other host the button is not rendered and the request returns 404; the normal `RECOVERY_KEY` flow is untouched. **Warning: never set `DEV_LOGIN` as a Worker secret or var, and never put it in `wrangler.jsonc`.** `.dev.vars.example` lists it commented out. The e2e helpers match the button named exactly "Sign in", so the extra button does not interfere.
-- Local D1 and R2 live under `.wrangler/state` (git-ignored). The `database_id` in `wrangler.jsonc` is a **placeholder** (`00000000-0000-0000-0000-000000000000`): `wrangler dev` ignores it and uses a local database, and nothing is created in Cloudflare. Replace it only at deploy time.
+`npm run dev` runs `wrangler dev --infer-origin-from-routes=false`. Keep that flag: otherwise wrangler rewrites the host and the local Dev sign in never shows. For one-click local sign in, put `DEV_LOGIN=1` in `.dev.vars` (never in production). Open `/demo` with no login, or `/app` after creating the password. More in [docs/development.md](docs/development.md).
+
+## Deploy
+
+1. `npx wrangler login`
+2. Set `RECOVERY_KEY` and `SESSION_SECRET` with `wrangler secret put`.
+3. Create the D1 database and the two R2 buckets, and paste the database id into `wrangler.jsonc`.
+4. `npm run db:migrate:remote`
+5. `npm run deploy`
+6. Open `/login`, create the password, and add a rate-limit rule for `POST /login`.
+
+Full steps, custom domain and prompt seeding: [docs/deploy.md](docs/deploy.md).
 
 ## Tests
 
 ```bash
-npm test
+npm test      # 347 unit and integration tests (jsdom suites need JSDOM_PATH)
+npm run e2e   # Playwright, desktop and mobile
 ```
 
-Node's built-in test runner (`node --test tests/*.test.js tests/*.test.mjs`) also runs `tests/api.test.mjs` (the `/api` guards and routes against in-memory D1 and R2 stubs), `tests/auth.test.mjs` (first-run setup and recovery key, sign-in, change, reset, session invalidation, rate limit), `tests/remote-store.test.js` (version sent and returned, 409, error statuses, every read goes to the server; uses `fake-indexeddb`, dev only), `tests/save-ui.test.js` (dirty tracking, Save success, failure and Retry, 409 Reload and Overwrite, leave warning, Save / Discard / Cancel, Parse and director replies saved at once, Setup Save, Ctrl/Cmd+S, `/demo` making no `/api` call), `tests/overview.test.js`, `tests/project-io.test.js` (export/import round trip, uses `jszip`, dev only), `tests/diff.test.js` (re-parse matching) and `tests/no-native-select.test.js`. It runs `tests/parser.test.js`, `tests/progress.test.js`, `tests/tree.test.js` and `tests/format.test.js` (the guide template parses to the documented counts) (sidebar tree: sorting, search, move, folder delete keeps projects; progress merge on re-parse, counts, percent, next to-do, filters, per-index reel progress with legacy flags, next reel image). The parser tests cover the sample conversation (counts, chunk boundaries, Persian digits, video scenes, thumbnail, cover headline, YouTube title, captions (bold, fenced, multi-line, per reel), Step 6 reels kept apart from the main counts, `Reel Scene Number` labels, several video prompts per reel, `splitWarmup`, Persian headings and digits), custom start phrases, ZWNJ and Arabic letter forms, fenced code, missing prompts, empty input and language detection. The UI and Worker are checked by hand (see "Not covered by tests").
+See [docs/testing.md](docs/testing.md).
 
-### Browser tests (Playwright)
+## Tech stack
 
-```bash
-npm install
-npx playwright install chromium   # once
-npm run e2e
-```
+Vanilla JavaScript client (no build step), Tailwind (CDN), Cloudflare Workers with static assets, D1, R2, Cron Triggers, Gemini and ElevenLabs APIs, Node test runner with jsdom, Playwright.
 
-`npm run e2e` first applies the local migrations and clears the local auth row (`scripts/e2e-reset-auth.mjs`, local D1 only), then starts `wrangler dev` on port 8799 (or reuses one already running) and runs `e2e/` in a desktop (1280x800) and a mobile (360x740) project. The suite covers `/demo` (sample, tabs, no `/api` calls, no horizontal scroll, chip labels, How it works), `/app` sign-in (needs `RECOVERY_KEY` in `.dev.vars`, read by the tests and never printed; the auth spec turns traces and screenshots off), media upload and lightbox, and the Setup cards. The specs use throwaway local passwords and leave a known password in the local D1, so run them only against local state. It is not part of `npm test`. Browser runs are done through the browser-verifier flow, not by the code-writing agent. The demo pages load Tailwind, fonts and Lucide from CDNs, so they need network access.
+## Documentation
 
-### Not covered by tests
-
-The UI, File System Access saving and real ElevenLabs calls are checked manually (the login flow is covered by `tests/auth.test.mjs`; real wrangler dev and Cloudflare CPU time are not) (DOM checks ran in jsdom outside the repo). No ElevenLabs key is used in tests.
-
-## Deploy (Cloudflare Workers)
-
-**Deploy stage only: none of this has been run.** `wrangler.jsonc` also binds D1 (`DB`), R2 (`AUDIO`, bucket `motion-books-audio`; `BACKUP`, bucket `motion-books-backups`), a daily Cron Trigger and a rate limit (`API_LIMIT`), and runs the Worker first for `/api/*`.
-
-Config is in `wrangler.jsonc`: static assets from `public/`, the Worker runs first only for `/app*`, `/login` and `/logout`, `workers_dev` is off, `cpu_ms` is 1000 (the daily backup parses the whole database in one pass, so 100 was too tight), and the only route is the custom domain `motioncontent.pooya.website` (zone `pooya.website`).
-
-1. `npx wrangler login` (once).
-2. Set the secrets:
-   ```bash
-   npm run gen:recovery                     # local file .local/secrets.txt, nothing printed
-   npx wrangler secret put RECOVERY_KEY     # paste the value from .local/secrets.txt
-   npx wrangler secret put SESSION_SECRET   # paste the value from .local/secrets.txt
-   ```
-3. Create the resources and put the real database id in `wrangler.jsonc` (deploy stage):
-   ```bash
-   npx wrangler d1 create motion-books          # copy the printed database_id into wrangler.jsonc
-   npx wrangler r2 bucket create motion-books-audio
-   npx wrangler r2 bucket create motion-books-backups   # private, used by the daily backup
-   npm run db:migrate:remote                    # applies every file in migrations/ remotely (0001_init.sql, 0002_media.sql, 0003_shares.sql, 0004_settings.sql, 0005_auth.sql)
-   ```
-4. `npm run deploy`.
-5. Add a Cloudflare rate-limiting rule for `POST /login` on the zone.
-6. Checklist: confirm `DEV_LOGIN` is not set anywhere in the deployed Worker (`npx wrangler secret list` must not show it, and it must not be in `wrangler.jsonc` vars). It is a local-only shortcut; it also refuses non-local hosts, but keep it out of production anyway.
-
-## Backups
-
-A Cron Trigger (`17 3 * * *`, 03:17 UTC) runs `src/backup.js` inside the Worker once a day. It writes to the private R2 bucket `motion-books-backups` (binding `BACKUP`):
-
-- `db/YYYY-MM-DD.json`: every D1 table (projects, folders, media, shares, settings including the Master Prompt, auth hash and salt, found through `sqlite_master`), the latest migration name and row counts. A rerun on the same day overwrites it. Backups older than 30 days are deleted, but the 7 newest always stay.
-- `media/<key>`: a copy of every object in the audio and media bucket that is not there yet (same key and size). Each run copies at most 40 objects or about 20 seconds, then continues the next day. Nothing is ever deleted from `media/`, so files removed in the app stay recoverable. If a file is replaced under the same key with a different size, the newer version replaces the copy.
-- `status/last-run.json`: time, rows per table, media copied, remaining and failed keys, duration, errors. Setup shows it in the Backups card (`/app` only) with a Run backup now button (`POST /api/backup/run`, one bounded pass, refused within a minute of the last one). `GET /api/backup/status` returns the same file. Logs never contain row contents.
-
-**Restore.** First option: D1 Time Travel (`npx wrangler d1 time-travel restore motion-books --timestamp=<ISO time>`), which rewinds the whole database. Second option, from a file backup:
-
-```bash
-npx wrangler r2 object get motion-books-backups/db/2026-11-18.json --file .local/db-2026-11-18.json --remote
-node scripts/restore-db-from-backup.mjs .local/db-2026-11-18.json            # writes .local/restore-2026-11-18.sql (git-ignored), prints counts only
-npx wrangler d1 execute motion-books --remote --file .local/restore-2026-11-18.sql
-```
-
-The SQL uses `INSERT OR REPLACE`; add `--wipe` to empty each table first. Run the migrations first on a fresh database. D1 limits one statement to about 100 KB, so a project with a very large text may need Time Travel instead. Media comes back by copying `media/<key>` to the same key in `motion-books-audio` (`wrangler r2 object get` then `put`).
-
-**Cost.** The cron, the Worker run and the R2 operations stay inside the free Workers and R2 allowances at this size. The media backup roughly doubles stored media and shares the 10 GB R2 free storage with the app files. The first pass copies 40 objects per day, so a large bucket takes several days to catch up. On the Workers Free plan a pass is also limited to 50 subrequests, which stops it after about a dozen objects; the next run continues.
-
-## Project layout
-
-```
-src/worker.js            login, logout, session cookie, gate for /app, routes /api/*
-src/backup.js            daily backup (Cron Trigger): D1 dump, retention, incremental media copy, status
-scripts/restore-db-from-backup.mjs   turns a db/ backup into SQL for wrangler d1 execute
-src/share.js             read-only share links (public /s/:token and the token helpers)
-src/api.js               /api handlers: D1 projects and folders, R2 audio, guards
-migrations/              D1 schema (0001_init.sql, 0002_media.sql, 0003_shares.sql, 0004_settings.sql, 0005_auth.sql)
-public/index.html        landing page
-public/format/           Input format guide page
-public/demo/             demo shell and sample conversation copy
-public/app/              real app shell (served only after login)
-public/static/           parser.js, progress.js, diff.js, store.js (local adapter), remote-store.js (app only), migrate.js (app only),
-                         project-io.js, overview.js, tree.js, audio.js, estimate.js, quality.js, queue.js, next.js, prompts.js, media.js, vault.js, ui.js, format.js, format-template.js, styles.css
-samples/                 fictional sample conversation
-tests/                   parser, progress, tree, diff, overview, project-io, remote-store, api tests
-wrangler.jsonc           Worker, assets and domain config
-```
-
-CDN libraries are pinned with integrity hashes: Tailwind browser build 4.1.11 (jsDelivr), Lucide 0.469.0 (unpkg), JSZip 3.10.1 (cdnjs). Fonts (Inter, JetBrains Mono, Vazirmatn) come from Google Fonts.
-
-## Cache busting
-
-`public/app/index.html` and `public/demo/index.html` load the scripts and stylesheet with a version query string (`?v=20261121t`). Bump it in both files whenever you change anything under `public/static/`, so browsers do not keep serving an old `ui.js` or `parser.js` (an old cached copy shows 0 reels after Load sample).
+| Doc | Contents |
+|---|---|
+| [docs/features.md](docs/features.md) | Full behaviour reference |
+| [docs/architecture.md](docs/architecture.md) | Storage, save and conflict flow, auth, share links, API routes |
+| [docs/input-format.md](docs/input-format.md) | What the parser expects |
+| [docs/deploy.md](docs/deploy.md) | Cloudflare setup and secrets |
+| [docs/backups.md](docs/backups.md) | Daily backup and restore |
+| [docs/development.md](docs/development.md) | Dev flags, DEV_LOGIN, cache busting, layout |
+| [docs/testing.md](docs/testing.md) | Unit and browser tests |
