@@ -1,0 +1,5 @@
+RECOVERY_KEY=generate-with-npm-run-gen-recovery
+SESSION_SECRET=generate-with-npm-run-gen-recovery
+
+# Local-only "Dev sign in" button on /login (also needs a localhost or 127.0.0.1 host). Off by default. NEVER set this as a Worker secret or var in production.
+# DEV_LOGIN=1

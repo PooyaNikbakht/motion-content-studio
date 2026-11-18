@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "motion-content-studio",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "account_id": "c48c192965431d03a764f7d674931517",
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    // /demo/ serves demo/index.html, /app serves app/index.html.
+    "html_handling": "drop-trailing-slash",
+    // Only the login gate runs the Worker first. Everything else is served as static files.
+    // /s/* serves read-only share links without login (src/share.js). /api/* is the storage API (signed-in only). Its handler answers 401 JSON itself, so it never redirects.
+    "run_worker_first": ["/app", "/app/*", "/login", "/logout", "/api/*", "/s/*"]
+  },
+  // Server storage for /app. The database_id below is a PLACEHOLDER: wrangler dev uses a local D1 (.wrangler/state)
+  // and ignores it. At deploy time create the database, then paste its real id here (see README, Deploy).
+  "d1_databases": [
+    { "binding": "DB", "database_name": "motion-books", "database_id": "c4537fdf-e622-4435-9c3c-36df82d33b30", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [{ "binding": "AUDIO", "bucket_name": "motion-books-audio" }],
+  // Per-IP request budget for /api/*. The handler works without this binding (it just skips the check).
+  "ratelimits": [{ "name": "API_LIMIT", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }],
+  "observability": { "enabled": true },
+  // Secrets, not vars: `npx wrangler secret put RECOVERY_KEY` and `npx wrangler secret put SESSION_SECRET`. The login password itself lives in D1 (migration 0005).
+  // Served only on motioncontent.pooya.website, where the zone's DDoS and rate-limit rules apply.
+  "workers_dev": false,
+  "preview_urls": false,
+  // Caps CPU per request (Workers Paid), so one runaway or abusive request can't run up usage.
+  "limits": { "cpu_ms": 100 },
+  "routes": [{ "pattern": "motioncontent.pooya.website", "custom_domain": true }]
+}

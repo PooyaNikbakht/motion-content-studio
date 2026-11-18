@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motion Content Studio | From AI director chat to audio, storyboard and thumbnail</title>
+<meta name="description" content="Paste a conversation with your AI director and get narration audio files (ElevenLabs), a visual storyboard, cover prompts and publishing text for a book-documentary channel. Runs in your browser.">
+<meta name="theme-color" content="#0B0F19">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Motion Content Studio">
+<meta property="og:title" content="Motion Content Studio | From AI director chat to audio, storyboard and thumbnail">
+<meta property="og:description" content="Paste a conversation with your AI director and get narration audio files, a visual storyboard and a thumbnail prompt. Runs in your browser.">
+<meta property="og:url" content="https://motioncontent.pooya.website/">
+<meta property="og:image" content="https://motioncontent.pooya.website/static/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Mock-up of an editing suite: an open book, storyboard cards, audio chunk cards with status chips and an amber waveform.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Motion Content Studio">
+<meta name="twitter:description" content="From AI director chat to audio, storyboard and thumbnail.">
+<meta name="twitter:image" content="https://motioncontent.pooya.website/static/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23F59E0B'/%3E%3Cpath d='M9 12v8M14 9v14M19 13v6M24 11v10' stroke='%230B0F19' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11/dist/index.global.js" integrity="sha384-XXN6/S6yXj8EpXnBTw3JGR9ZM+hixGxFCLYn0FHtg9cWh0ziKmAgTPEhecbCDOmj" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="/static/styles.css?v=20261121s">
+</head>
+<body>
+<header class="topbar"><div class="wrap">
+  <a class="brand" href="/"><span class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0B0F19" stroke-width="2.6" stroke-linecap="round"><path d="M4 8v8M9 5v14M14 9v6M19 7v10"/></svg></span>Motion Content Studio</a>
+  <nav class="projectbar" aria-label="Main"><a class="navlink" href="/format">Format guide</a><a class="btn sm ghost" href="/demo">Try the demo</a><a class="btn sm primary" href="/app">Open the app</a></nav>
+</div></header>
+<main>
+  <section class="wrap hero">
+    <div class="hero-copy">
+      <p class="eyebrow">For book-documentary channels</p>
+      <h1>From a chat with your AI director to a finished asset pack.</h1>
+      <p class="lead">Run the AI Director or paste the full conversation. Motion Content Studio splits it into audio chunks and turns them into numbered narration files with ElevenLabs, then lays out the image prompts, animation prompts, covers, publishing text and 9:16 reels as a board you can copy from.</p>
+      <div class="flex flex-wrap gap-3">
+        <a class="btn primary block-sm" href="/app">Open the app</a>
+        <a class="btn block-sm" href="/demo">Try the demo</a>
+      </div>
+      <p class="hint" style="margin-top:12px">The demo uses fictional sample content and simulated audio. No sign-in.</p>
+    </div>
+    <img class="hero-img" src="/static/hero.svg" width="1200" height="630" fetchpriority="high" decoding="async" alt="Illustration of an editing suite: an open book turning into film frames and storyboard cards, an app window listing audio chunks with Saved, Generating and Queued chips, and an amber audio waveform.">
+  </section>
+  <section class="wrap" aria-labelledby="how">
+    <h2 id="how" style="font-size:1.35rem;margin-bottom:16px">How it works</h2>
+    <ol class="steps">
+      <li><h3>Direct</h3><p class="muted small">Let the AI Director write the book package with Gemini in 6 stages, with a model chosen for each stage to balance quality and cost. Or paste a conversation you ran yourself.</p></li>
+      <li><h3>Parse</h3><p class="muted small">Audio chunks, 16:9 scenes, animation prompts, covers, titles, captions and 9:16 reels are found for you, with counts to check.</p></li>
+      <li><h3>Narrate</h3><p class="muted small">One click queues every chunk through ElevenLabs and saves numbered audio files.</p></li>
+      <li><h3>Build the visuals</h3><p class="muted small">Copy each image, video and cover prompt, then upload the finished images and videos to its card. In the real app they are stored on your account (Cloudflare R2). Thumbnails, covers and the 9:16 reels kit work the same way.</p></li>
+      <li><h3>Download</h3><p class="muted small">Download all assets as folders plus an edit list, ready for your video editor.</p></li>
+    </ol>
+    <p class="muted small" style="margin-top:16px"><strong>Demo or real app.</strong> The demo is public, uses fictional sample content and simulates the director and the audio, so it needs no keys. The real app is private: you sign in, add your own Gemini and ElevenLabs keys, and your projects are saved to your account.</p>
+  </section>
+  <section class="wrap" style="margin-top:40px" aria-labelledby="priv">
+    <div class="card"><h2 id="priv">Your data stays with you</h2>
+    <p class="muted" style="margin:0">Your Gemini and ElevenLabs keys stay in your browser, and requests go straight from your browser to those services. In the demo, projects stay in this browser. In the real app, projects, audio and uploaded files are saved to your own account behind a sign-in.</p></div>
+  </section>
+</main>
+<footer class="footer" style="margin-top:48px"><div class="wrap"><span>Fictional sample content in the demo. Demo by <a href="https://pooya.website">Pooya Nikbakht</a>.</span><span><a href="/demo">Demo</a> &middot; <a href="/format">Input format guide</a> &middot; <a href="https://github.com/PooyaNikbakht/motion-content-studio">Source</a></span></div></footer>
+</body>
+</html>

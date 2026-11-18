@@ -1,0 +1,301 @@
+Director: Here is the full package for "The Lighthouse Keeper's Ledger", a fictional novel used for this sample. Everything below is made up.
+
+## Step 1: Audio script
+
+**Audio chunk 1**
+
+Today the sea is very calm. The water lies like a blank white page, and there is not a single wave on the horizon. In this very silence, we open a book that was never meant to be published: "The Lighthouse Keeper's Ledger".
+
+The author of this book, a woman named Marta Velan, did only one job for thirty whole years: every night she lit the lamp, and every morning she put it out.
+
+---
+
+**Audio chunk 2**
+
+Today the sea is very calm. Every night Marta wrote a few lines in a small leather notebook. Not memories, not poems. Only the things she had seen from the window: ships that passed by, gulls that never came back.
+
+---
+
+Director: Chunk 3 is the turning point, keep the pace slow.
+
+**Audio chunk 3**
+
+Today the sea is very calm. But on page one hundred and twelve, the notebook suddenly changes. Marta writes: "Tonight I saw a boat without a light, and I do not know whether I should be glad or afraid."
+
+---
+
+**Audio chunk 4**
+
+Today the sea is very calm. Over the next twenty-seven pages, the same boat returns every night. Marta names it "the Guest", and for the first time, instead of a list of ships, she is talking to someone in the notebook.
+
+---
+
+**Audio chunk 5**
+
+Today the sea is very calm. When the book was finally printed after forty years, critics wrote that it is not a sea novel. It is a novel about loneliness and being seen.
+
+---
+
+**Audio chunk 6**
+
+Today the sea is very calm. And maybe that is why, even now, every night, someone somewhere switches on a light so that no one in the dark thinks they have been forgotten.
+
+---
+
+## Step 2: Image scenes
+
+**Scene Number: [01]**
+**Narration Part:** "The water lies like a blank white page, and there is not a single wave on the horizon."
+**Image Prompt:**
+```
+A perfectly calm sea at dawn, pale pink and grey sky, a small white lighthouse on a rocky point in the far distance, wide cinematic shot, soft haze, 16:9
+```
+
+**Scene Number: [02]**
+**Narration Part:** "For thirty whole years she did only one job: every night she lit the lamp."
+**Image Prompt:**
+```
+Interior of a lighthouse lantern room at dusk, a woman in a wool coat lighting a large brass lamp, warm amber glow, dust in the air, cinematic, shallow depth of field, 16:9
+```
+
+**Scene Number: [03]**
+**Narration Part:** "Every night she wrote a few lines in a small leather notebook."
+**Image Prompt:**
+```
+Close-up of a worn leather notebook on a wooden desk, a hand writing with a fountain pen, oil lamp light, window with ocean behind, 16:9
+```
+
+**Scene Number: [04]**
+**Narration Part:** "Ships that passed by, gulls that never came back."
+**Image Prompt:**
+```
+Silhouettes of two cargo ships on a dark horizon at twilight, a single seagull flying away from camera, muted blue palette, 16:9
+```
+
+**Scene Number: [05]**
+**Narration Part:** "Tonight I saw a boat without a light."
+**Image Prompt:**
+```
+A small wooden rowboat without any light drifting on black water at night, seen from high above through a lighthouse window, cold moonlight, 16:9
+```
+
+**Scene Number: [06]**
+**Narration Part:** "She names it \"the Guest\" and talks to someone."
+**Image Prompt:**
+```
+A woman leaning on a windowsill speaking quietly toward the dark sea, lantern glow on her face, mist rolling in, intimate framing, 16:9
+```
+
+**Scene Number: [07]**
+**Narration Part:** "After forty years, it was printed."
+**Image Prompt:**
+```
+A dusty first edition hardcover book being lifted from a cardboard box in a quiet print shop, golden afternoon light, 16:9
+```
+
+**Scene Number: [08]**
+**Narration Part:** "Someone, somewhere, switches on a light."
+**Image Prompt:**
+```
+A single warm light glowing in a distant window on a dark coastline, stars above, calm and hopeful mood, wide shot, 16:9
+```
+
+## Step 3: Notes
+
+Director: Keep the colour palette consistent: amber for light, slate blue for water.
+
+## Step 4: Flow animation
+
+Scenes chosen for animation: 02, 05, 08
+
+**Scene Number: [02]**
+**Video Prompt:**
+```
+Slow push-in on the woman as the brass lamp ignites, light sweeping across the room, dust floating, 6 seconds
+```
+
+**Scene Number: [05]**
+**Video Prompt:**
+```
+The drifting rowboat rocks gently on black water while moonlight ripples, slow downward tilt from the window, 6 seconds
+```
+
+**Scene Number: [08]**
+**Video Prompt:**
+```
+The distant window light flickers on and a faint beam of light slowly stretches across the water, stars twinkling, 6 seconds
+```
+
+## Step 5: Thumbnail and reels
+
+**Thumbnail Prompt:**
+```
+Cinematic poster-style image of a lighthouse beam cutting through dark fog over the sea, a small unlit boat in the beam, bold empty space on the left for a title, amber and deep navy, 16:9, no text
+```
+
+**Cover Headline:** "The Boat With No Light"
+
+**YouTube Title:** The Lighthouse Keeper's Ledger: The Night a Boat With No Light Appeared
+
+**Reel 1:** The boat with no light
+Cut from chunk 3. Hook: "One night she saw a boat with no light."
+**Cover Prompt:**
+```
+Vertical 9:16 close-up of a small dark rowboat under a lighthouse beam, moody, amber highlights, no text
+```
+
+**Reel 2:** Thirty years of one job
+Cut from chunk 1 and 2. Hook: "She had one job for thirty years."
+**Cover Prompt:**
+```
+Vertical 9:16 woman lighting a brass lamp, warm glow, shallow depth of field, no text
+```
+
+**Reel 3:** Why the book was hidden
+Cut from chunk 5. Hook: "The book waited forty years to be read."
+**Cover Prompt:**
+```
+Vertical 9:16 dusty leather notebook on a desk by a window, soft side light, no text
+```
+
+## Step 6: Reels and Shorts (9:16)
+
+Three independent vertical reels. Each has its own audio chunk, vertical image prompts and one or two vertical animation prompts.
+
+### Reel 01
+
+**Audio chunk**
+
+Today the sea is very calm. One night, Marta saw a boat without a light. There was no sound, no wave. Only a small shadow on the black water. And from that night on, her old notebook was no longer just a list.
+
+**Reel Scene Number: [R01-01]**
+**Narration Part:** "On the black water, a small boat without a light."
+**Image Prompt:**
+```
+Vertical 9:16, a tiny unlit rowboat on black water at night, lighthouse beam passing overhead, moody, amber highlights, no text
+```
+
+**Reel Scene Number: [R01-02]**
+**Narration Part:** "Marta watches from the window."
+**Image Prompt:**
+```
+Vertical 9:16, a woman in a wool coat at a lantern room window looking down at the dark sea, cold moonlight, portrait framing, no text
+```
+
+**Reel Scene Number: [R01-03]**
+**Narration Part:** "The notebook opens."
+**Image Prompt:**
+```
+Vertical 9:16, close-up of an open leather ledger with a hand writing, oil lamp glow, shallow depth of field, no text
+```
+
+**Video Prompt (Flow 9:16):**
+```
+Vertical 9:16, the unlit rowboat rocks on black water while the lighthouse beam sweeps over it, slow tilt up toward the light, 6 seconds
+```
+
+**Reel Cover Prompt:**
+```
+Vertical 9:16 reel cover, a small unlit rowboat under a sweeping lighthouse beam on black water, bold empty space at the top for a title, amber and deep navy palette, no text
+```
+
+**Cover Headline:** "A Boat Without a Light"
+
+**Caption:** One night, a boat without a light, and a notebook that changed everything.
+#lighthousekeeper #audiobook #story
+
+### Reel 02
+
+**Audio chunk**
+
+Today the sea is very calm. Thirty years, just one job. Every evening she lit the lighthouse lamp, and every morning she put it out. Nobody knew her name, but the ships trusted her light.
+
+**Reel Scene Number: [R02-01]**
+**Narration Part:** "The lighthouse lamp comes on."
+**Image Prompt:**
+```
+Vertical 9:16, a brass lighthouse lamp igniting, warm amber glow, dust in the air, tall composition, no text
+```
+
+**Reel Scene Number: [R02-02]**
+**Narration Part:** "Sunset over the sea."
+**Image Prompt:**
+```
+Vertical 9:16, a lighthouse on a rocky point at sunset, seen from below, tall sky, pale pink and grey clouds, no text
+```
+
+**Reel Scene Number: [R02-03]**
+**Narration Part:** "Ships pass by."
+**Image Prompt:**
+```
+Vertical 9:16, silhouette of a cargo ship on a dark horizon at twilight, seagull in the upper frame, muted blue palette, no text
+```
+
+**Reel Scene Number: [R02-04]**
+**Narration Part:** "In the morning, the lamp goes out."
+**Image Prompt:**
+```
+Vertical 9:16, a woman's hand switching off the lamp at sunrise, soft light entering through the window, no text
+```
+
+**Video Prompt (Flow 9:16):**
+```
+Vertical 9:16, the brass lamp ignites and light sweeps across the lantern room, slow push-in, dust floating, 6 seconds
+```
+
+**Video Prompt 2 (Flow 9:16):**
+```
+Vertical 9:16, the lamp switches off at sunrise and the room fades from amber to cool grey, slow pull-out, 5 seconds
+```
+
+**Reel Cover Prompt:**
+```
+Vertical 9:16 reel cover, an old keeper's hand on a brass lamp at golden hour, warm glow against a dark lantern room, space for a title at the top, no text
+```
+
+**Cover Headline:** "Thirty Years, One Lamp"
+
+**Caption:**
+Thirty years, one job: keeping a single lamp lit.
+
+Watch the full story in the main video.
+#lighthouse #books
+
+### Reel 03
+
+**Audio chunk**
+
+Today the sea is very calm. A book that gathered dust in a box for forty years. Now it is finally printed, and many say this is not a story about loneliness, it is a story about being seen.
+
+**Reel Scene Number: [R03-01]**
+**Narration Part:** "The dusty box."
+**Image Prompt:**
+```
+Vertical 9:16, a dusty cardboard box with a leather notebook inside, attic light beam, floating dust, no text
+```
+
+**Reel Scene Number: [R03-02]**
+**Narration Part:** "The book is printed."
+**Image Prompt:**
+```
+Vertical 9:16, a first edition hardcover being lifted from a box in a quiet print shop, golden afternoon light, no text
+```
+
+**Reel Scene Number: [R03-03]**
+**Narration Part:** "The readers."
+**Image Prompt:**
+```
+Vertical 9:16, a reader holding the book on a quiet balcony at dusk, a distant light on the coast, hopeful mood, no text
+```
+
+**Video Prompt (Flow 9:16):**
+```
+Vertical 9:16, the book cover slowly emerges from the dust as warm light moves across it, gentle push-in, 6 seconds
+```
+
+**Reel Cover Prompt:**
+```
+Vertical 9:16 reel cover, a weathered leather ledger half buried in dust with a single beam of light across it, mysterious mood, title space at the top, no text
+```
+
+**Caption:** "Forty years in a box. Now, finally, it is being read."
