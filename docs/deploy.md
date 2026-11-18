@@ -1,6 +1,6 @@
 # Deploy (Cloudflare Workers)
 
-Config is in `wrangler.jsonc`: static assets from `public/`, the Worker runs first for `/app*`, `/login`, `/logout`, `/api/*` and `/s/*`, `workers_dev` and preview URLs are off, `cpu_ms` is 1000 (the daily backup parses the whole database in one pass), and the only route is the custom domain `motioncontent.pooya.website` (zone `pooya.website`). Bindings: D1 `DB`, R2 `AUDIO` and `BACKUP`, a daily Cron Trigger and the `API_LIMIT` rate limit.
+Config is in `wrangler.jsonc`: static assets from `public/`, the Worker runs first for `/app*`, `/login`, `/logout`, `/api/*` and `/s/*`, `workers_dev` and preview URLs are off, `cpu_ms` is 1000 (the daily backup parses the whole database in one pass), and the only route is the custom domain `motioncontent.pooya.website` (zone `pooya.website`). Bindings: D1 `DB`, R2 `AUDIO` and `BACKUP`, a daily Cron Trigger and the `API_LIMIT` and `LOGIN_LIMIT` rate limits.
 
 Internal names are unchanged on purpose: the D1 database is `motion-books`, and the R2 buckets are `motion-books-audio` and `motion-books-backups`. Renaming them would orphan existing data.
 
@@ -23,7 +23,7 @@ Internal names are unchanged on purpose: the D1 database is `motion-books`, and 
 
 ## Rate limits
 
-Add a Cloudflare rate-limiting rule for `POST /login` on the zone. The in-Worker lockout is best effort (isolate memory), and `API_LIMIT` covers only `/api/*` and `/s/*`.
+Every `POST /login` (all actions) is limited per IP (`CF-Connecting-IP`) by the `LOGIN_LIMIT` Workers Rate Limiting binding in `wrangler.jsonc`: 10 per 60 seconds, then 429 with `Retry-After: 60`, checked before any hashing or D1 work. No dashboard rule is needed. This matters on the Free plan, where the zone has a single WAF rate-limiting rule and it may already be used. The in-Worker lockout (5 misses in 15 minutes, isolate memory) stays as a second layer. `API_LIMIT` (120 per minute) covers `/api/*` and `/s/*`.
 
 ## Seed the Director Prompt vault
 

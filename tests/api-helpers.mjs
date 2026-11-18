@@ -92,8 +92,10 @@ export function makeEnv(opts = {}) {
     async list({ prefix }) { return { objects: [...objects.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })), truncated: false }; },
   };
   const limit = { allow: true, calls: [] };
-  const env = { RECOVERY_KEY: RECOVERY, LOGIN_DELAY_MS: "0", SESSION_SECRET: SECRET, DB, AUDIO, API_LIMIT: opts.noLimiter ? undefined : { async limit(o) { limit.calls.push(o); return { success: limit.allow }; } } };
-  return { env, authRows, settings, media, shares, projects, folders, audio, objects, limit };
+  const loginLimit = { calls: [], counts: new Map(), max: 10 }; // counts per key like the real binding (10 per window)
+  const LOGIN_LIMIT = opts.noLoginLimiter ? undefined : { async limit(o) { loginLimit.calls.push(o); const c = (loginLimit.counts.get(o.key) || 0) + 1; loginLimit.counts.set(o.key, c); return { success: c <= loginLimit.max }; } };
+  const env = { RECOVERY_KEY: RECOVERY, LOGIN_DELAY_MS: "0", SESSION_SECRET: SECRET, DB, AUDIO, LOGIN_LIMIT, API_LIMIT: opts.noLimiter ? undefined : { async limit(o) { limit.calls.push(o); return { success: limit.allow }; } } };
+  return { env, authRows, settings, media, shares, projects, folders, audio, objects, limit, loginLimit };
 }
 
 /** A Request. Body strings and byte arrays get a Content-Length unless headers say otherwise. */

@@ -107,7 +107,7 @@ npm run dev                 # http://localhost:8787
 3. Create the D1 database and the two R2 buckets, and paste the database id into `wrangler.jsonc`.
 4. `npm run db:migrate:remote`
 5. `npm run deploy`
-6. Open `/login`, create the password, and add a rate-limit rule for `POST /login`.
+6. Open `/login`, and create the password (`POST /login` is rate limited by the built-in `LOGIN_LIMIT` binding, no dashboard rule needed).
 
 Full steps, custom domain and prompt seeding: [docs/deploy.md](docs/deploy.md).
 

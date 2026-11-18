@@ -61,7 +61,7 @@ sequenceDiagram
 - A correct sign-in sets an `HttpOnly`, `Secure`, `SameSite=Lax` cookie signed with HMAC-SHA256 (`SESSION_SECRET`), valid 30 days, carrying a session epoch stored in the auth row. `/logout` clears it. Unauthenticated `/app*` redirects to `/login`.
 - First run: until a password exists, `/login` shows Create password. It needs the `RECOVERY_KEY` secret, 10+ characters and a confirmation, and works once only (a second attempt gets 409).
 - Change password (`/login?mode=change`) needs the current password. Forgot password (`/login?mode=forgot`) needs `RECOVERY_KEY`. Both bump the epoch, so other sessions are signed out.
-- Failed attempts are slowed and locked out after 5 misses in 15 minutes per IP. The counter lives in isolate memory (best effort), so also add a Cloudflare rate-limiting rule on `POST /login`.
+- Failed attempts are slowed and locked out after 5 misses in 15 minutes per IP. The counter lives in isolate memory (best effort), so it is the second layer. The first is the `LOGIN_LIMIT` Workers Rate Limiting binding: every `POST /login` is limited per `CF-Connecting-IP` (10 per 60 seconds, 429 with `Retry-After: 60`) before any hashing or D1 work, and skipped if the binding is absent. It replaces a dashboard rule because the Free plan allows only one WAF rate-limiting rule.
 - `/app` and `/login` send `noindex` and `no-store`; `robots.txt` disallows them. The landing page, `/demo` and `/format` are indexable.
 - `LOGIN_DELAY_MS` (optional var) overrides the failed-attempt delay; tests set it to 0. Secrets are never logged.
 

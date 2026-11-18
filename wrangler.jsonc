@@ -25,8 +25,12 @@
   ],
   // Daily backup at 03:17 UTC (Cron Triggers are free on Workers).
   "triggers": { "crons": ["17 3 * * *"] },
-  // Per-IP request budget for /api/*. The handler works without this binding (it just skips the check).
-  "ratelimits": [{ "name": "API_LIMIT", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }],
+  // Per-IP request budgets. API_LIMIT covers /api/*; LOGIN_LIMIT covers every POST /login (the zone's one WAF rate-limit rule is taken).
+  // The handlers work without these bindings (they just skip the check).
+  "ratelimits": [
+    { "name": "API_LIMIT", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } },
+    { "name": "LOGIN_LIMIT", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+  ],
   "observability": { "enabled": true },
   // Secrets, not vars: `npx wrangler secret put RECOVERY_KEY` and `npx wrangler secret put SESSION_SECRET`. The login password itself lives in D1 (migration 0005).
   // Served only on motioncontent.pooya.website, where the zone's DDoS and rate-limit rules apply.

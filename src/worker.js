@@ -13,7 +13,7 @@ export { isAuthed };
 const MAX_FAILURES = 5; // per IP, per isolate, inside the window
 const WINDOW_MS = 15 * 60 * 1000;
 
-// Best-effort limiter: memory is per isolate, so add a Cloudflare rate-limit rule on POST /login too.
+// Second layer: memory is per isolate. The first layer is the LOGIN_LIMIT Workers Rate Limiting binding in handleLogin.
 const failures = new Map();
 
 function cookie(value, maxAge, url) {
@@ -108,6 +108,11 @@ function redirect(location, extra = {}) {
 
 async function handleLogin(request, env, url) {
   const ip = request.headers.get("CF-Connecting-IP") || "local";
+  // Per-IP budget on every POST /login (all actions), before any form, hash or D1 work. A missing binding (tests, local) skips it.
+  if (env.LOGIN_LIMIT) {
+    const { success } = await env.LOGIN_LIMIT.limit({ key: ip });
+    if (!success) return loginPage("Too many attempts. Wait a minute and try again.", 429, { "Retry-After": "60" }, "signin", "", devEnabled(env, url));
+  }
   const now = Date.now();
   let rec = failures.get(ip);
   if (rec && now - rec.first > WINDOW_MS) { failures.delete(ip); rec = undefined; }

@@ -145,6 +145,40 @@ test("rate limit: 5 misses lock the IP for login, setup and reset; success elsew
   assert.equal((await post(m.env, { action: "forgot", recovery: RECOVERY, new: NEW, confirm: NEW }, { ipAddr: b })).status, 429);
 });
 
+test("LOGIN_LIMIT: the 11th POST /login in a window gets 429 before any hashing or D1 work, other IPs are unaffected", async () => {
+  const m = makeEnv({ noAuth: true });
+  const a = ip();
+  let prepares = 0;
+  const env = { ...m.env, DB: { prepare(...x) { prepares++; return m.env.DB.prepare(...x); }, batch: (l) => m.env.DB.batch(l) } };
+  for (let i = 0; i < 10; i++) assert.notEqual((await post(env, { action: "signin", password: "x" }, { ipAddr: a })).status, 429);
+  const before = prepares;
+  for (const action of ["signin", "setup", "change", "forgot", "dev"]) {
+    const r = await post(env, setupFields({ action }), { ipAddr: a });
+    assert.equal(r.status, 429, action);
+    assert.equal(r.headers.get("Retry-After"), "60");
+    assert.match(await r.text(), /Too many attempts\. Wait a minute and try again\./);
+  }
+  assert.equal(prepares, before, "no D1 work once limited");
+  assert.equal(m.authRows.size, 0);
+  assert.equal(m.loginLimit.calls.at(-1).key, a);
+  assert.equal((await post(env, setupFields(), { ipAddr: ip() })).status, 303);
+});
+
+test("LOGIN_LIMIT: keyed by CF-Connecting-IP with a local fallback; GET /login is not limited", async () => {
+  const m = makeEnv({ noAuth: true });
+  await worker.fetch(new Request(ORIGIN + "/login", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: ORIGIN }, body: new URLSearchParams({ password: "x" }) }), withAssets(m.env));
+  assert.equal(m.loginLimit.calls[0].key, "local");
+  m.loginLimit.max = 0;
+  for (let i = 0; i < 3; i++) assert.equal((await get(m.env, "/login")).status, 200);
+  assert.equal(m.loginLimit.calls.length, 1, "GET never touches the limiter");
+});
+
+test("LOGIN_LIMIT: an absent binding is skipped without breaking sign in", async () => {
+  const m = makeEnv({ noAuth: true, noLoginLimiter: true });
+  assert.equal(m.env.LOGIN_LIMIT, undefined);
+  assert.equal((await post(m.env, setupFields())).status, 303);
+});
+
 test("cross-origin form posts are blocked", async () => {
   const m = makeEnv({ noAuth: true });
   const res = await worker.fetch(new Request(ORIGIN + "/login", { method: "POST", headers: { Origin: "https://evil.test", "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(setupFields()) }), withAssets(m.env));
