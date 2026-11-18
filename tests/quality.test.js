@@ -8,8 +8,9 @@ const PHRASE = P.DEFAULT_START_PHRASE;
 const sample = P.parse(fs.readFileSync(__dirname + "/../samples/sample-conversation.txt", "utf8"), { startPhrase: PHRASE });
 const codes = (l) => l.map((x) => x.code);
 
-test("the sample passes every check", () => {
-  assert.deepEqual(Q.check(sample, { model: "eleven_v3", startPhrase: PHRASE, lang: "en" }), []);
+test("the sample passes every check, with no start phrase", () => {
+  assert.deepEqual(Q.check(sample, { model: "eleven_v3", startPhrase: "", lang: "en" }), []);
+  assert.deepEqual(Q.check(sample, { model: "eleven_v3", lang: "en" }), []);
 });
 
 test("Eleven v4 allows 10,000 characters per request and flags 10,001", () => {

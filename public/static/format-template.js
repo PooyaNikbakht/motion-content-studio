@@ -11,16 +11,15 @@
   /** What parsing buildTemplate() must produce (checked in tests/format.test.js). */
   const EXPECTED = { audioChunks: 2, imageScenes: 2, animations: 1, reels: 1, reelAudio: 1, thumbnail: true, warnings: 0 };
 
-  /** A short skeleton with placeholders. Every chunk and reel audio starts with the start phrase. */
-  function buildTemplate(startPhrase) {
-    const sp = startPhrase;
+  /** A short skeleton with placeholders. Each chunk and reel audio is an Audio chunk label followed by a code block. */
+  function buildTemplate() {
     return [
       "## Step 1: Audio script", "",
       "**Audio chunk 1**", "",
-      sp + ". [Narration for chunk 1 goes here.]", "",
+      "```", "[Narration for chunk 1 goes here.]", "```", "",
       "---", "",
       "**Audio chunk 2**", "",
-      sp + ". [Narration for chunk 2 goes here.]", "",
+      "```", "[Narration for chunk 2 goes here.]", "```", "",
       "---", "",
       "## Step 2: Image scenes", "",
       "**Scene Number: [01]**",
@@ -45,7 +44,7 @@
       "## Step 6: Reels and Shorts (9:16)", "",
       "### Reel 01", "",
       "**Audio chunk**", "",
-      sp + ". [Narration for the reel goes here.]", "",
+      "```", "[Narration for the reel goes here.]", "```", "",
     ].concat([1, 2, 3].reduce((acc, n) => acc.concat([
       "**Reel Scene Number: [R01-0" + n + "]**",
       '**Narration Part:** "[The sentence this vertical image shows]"',

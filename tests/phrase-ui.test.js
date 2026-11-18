@@ -6,16 +6,16 @@ const { JSDOM, boot } = require("./ui-harness.js");
 const skip = !JSDOM && "jsdom not available (set JSDOM_PATH)";
 const vaultFetch = async () => ({ ok: true, status: 200, json: async () => ({ text: "M", defaultText: "M", updatedAt: 1 }), text: async () => "" });
 
-test("the start phrase is a parse option: each project can use its own, and none gives the actionable warning", () => {
+test("the start phrase is an optional fallback parse option: each project can use its own, and none gives the actionable warning", () => {
   const text = "Alpha one. First chunk.\n\n---\n\nBeta two. Second chunk.";
   assert.equal(P.parse(text, { startPhrase: "Alpha one" }).stats.audioChunks, 1);
   assert.equal(P.parse(text, { startPhrase: "Beta two" }).stats.audioChunks, 1);
   const none = P.parse(text, { startPhrase: "" });
   assert.equal(none.stats.audioChunks, 0);
-  assert.deepEqual(none.warnings, ["No audio chunks found. Set the chunk start phrase in step 1."]);
+  assert.deepEqual(none.warnings, ["No audio chunks found. Expected **Audio chunk 1** labels with the text in a code block (or, for older conversations, the chunk start phrase from step 1)."]);
 });
 
-test("app: Load sample finds 6 chunks with an empty global start phrase, no warning, and a note; the global setting is untouched", { skip }, async () => {
+test("app: Load sample finds 6 chunks by their labels with no start phrase and no warning; the phrase stays empty", { skip }, async () => {
   let h;
   const fetch = async (u) => (String(u).includes("sample") ? { ok: true, text: async () => h.sample } : vaultFetch());
   h = await boot({ mode: "app", projects: [{ id: "p0", name: "E" }], fetch });
@@ -26,12 +26,10 @@ test("app: Load sample finds 6 chunks with an empty global start phrase, no warn
   click($("#load-sample")); await wait(300);
   assert.equal(h.projs.get("p0").parsed.stats.audioChunks, 6);
   assert.equal($$("#result .warn").length, 0);
-  assert.equal($("#phrase").value, "Today the sea is very calm");
-  assert.equal($("#phrase-note").hidden, false);
-  assert.match($("#phrase-note").textContent, /Start phrase set to the sample's phrase for this project/);
+  assert.equal($("#phrase").value, "");
   assert.equal(h.settings.startPhrase, "", "the global setting is not touched");
   await wait(1000);
-  assert.equal(h.projs.get("p0").ext.startPhrase, "Today the sea is very calm");
+  assert.ok(!h.projs.get("p0").ext || !h.projs.get("p0").ext.startPhrase);
 });
 
 test("app: Parse without any start phrase still parses scenes, shows the field error, focuses the field and offers Set start phrase", { skip }, async () => {
@@ -43,7 +41,7 @@ test("app: Parse without any start phrase still parses scenes, shows the field e
   click($("#parse-btn")); await wait(200);
   assert.equal(h.projs.get("p0").parsed.stats.imageScenes, 1, "scenes are still parsed");
   assert.equal($("#phrase-err").hidden, false);
-  assert.equal($("#phrase-err").textContent, "Set the chunk start phrase (step 1) to find audio chunks");
+  assert.equal($("#phrase-err").textContent, "No audio chunks found. Use Audio chunk labels with the text in a code block, or set the start phrase for an older conversation");
   assert.equal(h.w.document.activeElement.id, "phrase");
   const btn = $("[data-focus-phrase]");
   assert.ok(btn && /Set start phrase/.test(btn.textContent));

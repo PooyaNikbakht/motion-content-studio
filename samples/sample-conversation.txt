@@ -4,15 +4,19 @@ Director: Here is the full package for "The Lighthouse Keeper's Ledger", a ficti
 
 **Audio chunk 1**
 
-Today the sea is very calm. The water lies like a blank white page, and there is not a single wave on the horizon. In this very silence, we open a book that was never meant to be published: "The Lighthouse Keeper's Ledger".
+```
+The water lies like a blank white page, and there is not a single wave on the horizon. In this very silence, we open a book that was never meant to be published: "The Lighthouse Keeper's Ledger".
 
 The author of this book, a woman named Marta Velan, did only one job for thirty whole years: every night she lit the lamp, and every morning she put it out.
+```
 
 ---
 
 **Audio chunk 2**
 
-Today the sea is very calm. Every night Marta wrote a few lines in a small leather notebook. Not memories, not poems. Only the things she had seen from the window: ships that passed by, gulls that never came back.
+```
+Every night Marta wrote a few lines in a small leather notebook. Not memories, not poems. Only the things she had seen from the window: ships that passed by, gulls that never came back.
+```
 
 ---
 
@@ -20,25 +24,33 @@ Director: Chunk 3 is the turning point, keep the pace slow.
 
 **Audio chunk 3**
 
-Today the sea is very calm. But on page one hundred and twelve, the notebook suddenly changes. Marta writes: "Tonight I saw a boat without a light, and I do not know whether I should be glad or afraid."
+```
+But on page one hundred and twelve, the notebook suddenly changes. Marta writes: "Tonight I saw a boat without a light, and I do not know whether I should be glad or afraid."
+```
 
 ---
 
 **Audio chunk 4**
 
-Today the sea is very calm. Over the next twenty-seven pages, the same boat returns every night. Marta names it "the Guest", and for the first time, instead of a list of ships, she is talking to someone in the notebook.
+```
+Over the next twenty-seven pages, the same boat returns every night. Marta names it "the Guest", and for the first time, instead of a list of ships, she is talking to someone in the notebook.
+```
 
 ---
 
 **Audio chunk 5**
 
-Today the sea is very calm. When the book was finally printed after forty years, critics wrote that it is not a sea novel. It is a novel about loneliness and being seen.
+```
+When the book was finally printed after forty years, critics wrote that it is not a sea novel. It is a novel about loneliness and being seen.
+```
 
 ---
 
 **Audio chunk 6**
 
-Today the sea is very calm. And maybe that is why, even now, every night, someone somewhere switches on a light so that no one in the dark thinks they have been forgotten.
+```
+And maybe that is why, even now, every night, someone somewhere switches on a light so that no one in the dark thinks they have been forgotten.
+```
 
 ---
 
@@ -166,7 +178,9 @@ Three independent vertical reels. Each has its own audio chunk, vertical image p
 
 **Audio chunk**
 
-Today the sea is very calm. One night, Marta saw a boat without a light. There was no sound, no wave. Only a small shadow on the black water. And from that night on, her old notebook was no longer just a list.
+```
+One night, Marta saw a boat without a light. There was no sound, no wave. Only a small shadow on the black water. And from that night on, her old notebook was no longer just a list.
+```
 
 **Reel Scene Number: [R01-01]**
 **Narration Part:** "On the black water, a small boat without a light."
@@ -208,7 +222,9 @@ Vertical 9:16 reel cover, a small unlit rowboat under a sweeping lighthouse beam
 
 **Audio chunk**
 
-Today the sea is very calm. Thirty years, just one job. Every evening she lit the lighthouse lamp, and every morning she put it out. Nobody knew her name, but the ships trusted her light.
+```
+Thirty years, just one job. Every evening she lit the lighthouse lamp, and every morning she put it out. Nobody knew her name, but the ships trusted her light.
+```
 
 **Reel Scene Number: [R02-01]**
 **Narration Part:** "The lighthouse lamp comes on."
@@ -265,7 +281,9 @@ Watch the full story in the main video.
 
 **Audio chunk**
 
-Today the sea is very calm. A book that gathered dust in a box for forty years. Now it is finally printed, and many say this is not a story about loneliness, it is a story about being seen.
+```
+A book that gathered dust in a box for forty years. Now it is finally printed, and many say this is not a story about loneliness, it is a story about being seen.
+```
 
 **Reel Scene Number: [R03-01]**
 **Narration Part:** "The dusty box."

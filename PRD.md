@@ -14,7 +14,6 @@ It is used for real by its author, and shown as a portfolio demo.
 - Parse a pasted conversation into chunks, scenes, animations, the YouTube cover prompt, publishing text and the Step 6 Reels package (3 reels, each with audio, vertical image prompts, one or two vertical animation prompts and a cover prompt), and show counts to check it.
 - Organise the app as two production workflows behind three main tabs (Import & Parse, YouTube 16:9, Reels 9:16). YouTube has Audio, Visual Board and Cover & SEO sub-tabs; Reels has one tab per reel, each with Audio, Visual Board and Cover & Captions sub-tabs, a shared compact action bar, deep links in the URL hash and the last position remembered.
 - Work each reel as a mini-studio: audio, vertical images (labelled R01-01 and so on), vertical animations and a 9:16 reel cover, with per-prompt progress.
-- Dim the warm-up start phrase in the display (never in the text sent to ElevenLabs).
 - Generate reel audio separately from the main chunks, saved in a Reels subfolder or ZIP folder, and track reel progress per project.
 - Generate numbered audio files with ElevenLabs from the browser, saved to a folder or a ZIP.
 - Show every prompt in a board with one-click copy.
@@ -54,7 +53,7 @@ It is used for real by its author, and shown as a portfolio demo.
 - AI Director: the app can run the master prompt on Gemini itself (Import & Parse mode toggle), per-user key in the browser, Setup holds key, model, token rates and the prompt vault; /demo simulates it. The conversation is stored as the project text so the parser, diff and carry logic are unchanged. Cost is an estimate before the run and counted from usage after each turn. Decisions: default model gemini-3.8-flash ($0.75/$3.75 per 1M tokens), then gemini-4-hydrogen ($1.50/$7.50) and gemini-4-carbon (best quality, $2/$10 until 30 Nov 2026, $4/$20 after); gemini-2.5-pro and 2.5-flash remain selectable but are deprecated and may 404 for new keys. All rates are editable in Setup. Smart per-stage routing: presets Smart Hybrid (default), All Carbon, All Flash plus per-stage overrides, mid-run model switch in the panel, and per-turn cost from the model that actually ran (assumption: a turn uses the model of the stage reached by the previous reply). Project text cap raised to 900 KB (rows stay under D1's 2 MB).
 - Director feedback: per-stage feedback reply, Regenerate, edit-and-accept of the last reply, "Pause after each stage" toggle; duplicated numbered chunks or scenes resolve to the latest version (unnumbered chunks cannot be matched, so they are all kept).
 - Setup cards are collapsible; open/closed is remembered per card in the browser; first run opens all, afterwards only cards needing attention (assumption: "per user" means per browser profile, no server storage).
-- Start phrase is per project, with the Setup value as the default.
+- Audio chunks are found by `**Audio chunk N**` labels with the text in a code block. The start phrase is optional (per project, the Setup value is the default) and only a fallback for older conversations.
 
 ## 4. Acceptance criteria
 
@@ -80,7 +79,7 @@ It is used for real by its author, and shown as a portfolio demo.
 - The rate-limit binding behaves differently in local dev; the handler works without it.
 - Parse undo is kept in the browser (localStorage, up to its quota) and stays on this device; the change history (counts and hashes) is part of the project.
 
-- The real conversation format may differ from the assumed one. Mitigation: tolerant parser, configurable start phrase, warnings, tests on a sample.
+- The real conversation format may differ from the assumed one. Mitigation: tolerant parser, optional start-phrase fallback, warnings, tests on a sample.
 - Browsers without the File System Access API (Safari, Firefox) cannot save to a folder. Mitigation: ZIP download.
 - The key sits in the browser. Mitigation: documented; use a key with a limit.
 - Gemini rates, model names and limits change. Mitigation: rates are editable in Setup, the estimate is labelled, and real token counts are used after each turn.

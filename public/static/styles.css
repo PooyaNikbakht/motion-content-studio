@@ -398,8 +398,6 @@ section > .panel + .folderrow, section > .panel + .folder-note { margin-top: 12p
 .reel .clamp { font-size: 0.95rem; color: #cfd5de; line-height: 1.7; }
 .reel audio { width: 100%; height: 36px; }
 .rnote { margin-top: 8px; }
-.warmup { color: var(--muted-2); opacity: 0.6; }
-.dimtoggle { gap: 8px; margin-inline-end: auto; }
 .vbadge::before { content: ""; display: inline-block; width: 7px; height: 12px; border: 2px solid currentColor; border-radius: 2px; }
 
 /* Status: small dot plus text, never colour alone */

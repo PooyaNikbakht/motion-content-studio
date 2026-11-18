@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11/dist/index.global.js" integrity="sha384-XXN6/S6yXj8EpXnBTw3JGR9ZM+hixGxFCLYn0FHtg9cWh0ziKmAgTPEhecbCDOmj" crossorigin="anonymous"></script>
-<link rel="stylesheet" href="/static/styles.css?v=20261121t">
+<link rel="stylesheet" href="/static/styles.css?v=20261122b">
 </head>
 <body>
 <header class="topbar"><div class="wrap">
@@ -39,11 +39,11 @@
     <table class="fmt-table">
       <thead><tr><th scope="col">Part</th><th scope="col">What to write</th><th scope="col">Notes</th></tr></thead>
       <tbody>
-        <tr><th scope="row" data-label="Part">Step 1: audio chunks</th><td data-label="What to write">Each chunk starts with the <b>chunk start phrase</b>. Default: <code id="dflt-phrase"></code></td><td data-label="Notes">A chunk runs until the next chunk, a heading, <code>---</code>, a code fence, a <code>Step N</code> line or a label. The phrase is a setting, so it can be anything.</td></tr>
+        <tr><th scope="row" data-label="Part">Step 1: audio chunks</th><td data-label="What to write">Each chunk is a label line <code>**Audio chunk 1**</code> (then 2, 3, ...) followed by the narration in a <b>code block</b>.</td><td data-label="Notes">The number after the label numbers the chunk. Bold, a trailing colon, <code>### </code> headings and a short note between the label and the code block are all fine. With no code block, the plain text up to the next label or heading is used.</td></tr>
         <tr><th scope="row" data-label="Part">Step 2: image scenes</th><td data-label="What to write"><code>Scene Number: [01]</code>, then <code>Narration Part: "..."</code>, then <code>Image Prompt:</code> followed by a code block.</td><td data-label="Notes">Persian and Arabic-Indic digits are accepted in scene numbers. A scene without a prompt gives a warning.</td></tr>
         <tr><th scope="row" data-label="Part">Step 4: video prompts</th><td data-label="What to write">A line naming the scenes to animate, then <code>Scene Number: [02]</code> and <code>Video Prompt:</code> with a code block.</td><td data-label="Notes">Only scenes named here get an animation. They are not counted as image scenes.</td></tr>
         <tr><th scope="row" data-label="Part">Step 5: thumbnail</th><td data-label="What to write"><code>Thumbnail Prompt:</code> followed by a code block (the 16:9 YouTube cover).</td><td data-label="Notes">Read from Step 5, or anywhere before Step 6 when there are no step headings.</td></tr>
-        <tr><th scope="row" data-label="Part">Step 6: reels</th><td data-label="What to write">A heading <code>Step 6: Reels and Shorts</code>, then <code>Reel 01</code> to <code>Reel 03</code>. Each reel has an <b>Audio chunk</b> that starts with the start phrase, <code>Reel Scene Number: [R01-01]</code> with an <code>Image Prompt</code> (3 to 4 vertical 9:16 prompts), one or two <code>Video Prompt (Flow 9:16)</code> blocks and a <code>Reel Cover Prompt:</code>.</td><td data-label="Notes">Everything inside Step 6 stays separate from the main video counts. A missing cover is a warning.</td></tr>
+        <tr><th scope="row" data-label="Part">Step 6: reels</th><td data-label="What to write">A heading <code>Step 6: Reels and Shorts</code>, then <code>Reel 01</code> to <code>Reel 03</code>. Each reel has an <b>Audio chunk</b> label (the number is optional) followed by a code block, <code>Reel Scene Number: [R01-01]</code> with an <code>Image Prompt</code> (3 to 4 vertical 9:16 prompts), one or two <code>Video Prompt (Flow 9:16)</code> blocks and a <code>Reel Cover Prompt:</code>.</td><td data-label="Notes">Everything inside Step 6 stays separate from the main video counts. A missing cover is a warning.</td></tr>
         <tr><th scope="row" data-label="Part">Publishing text</th><td data-label="What to write"><code>Cover Headline:</code>, <code>YouTube Title:</code> and <code>Caption:</code>. Inside a reel block they belong to that reel.</td><td data-label="Notes">Missing ones are simply left empty. Hashtag lines under a caption are kept.</td></tr>
       </tbody>
     </table>
@@ -61,7 +61,7 @@
         <li>Director notes between sections.</li>
       </ul></div>
       <div class="card"><h3>What breaks it</h3><ul class="fmt-list">
-        <li>Chunks that do not start with the start phrase. The phrase is configurable: set it in Import &amp; Parse.</li>
+        <li>Narration without an <code>Audio chunk N</code> label. For older conversations where every chunk starts with the same phrase, set the optional chunk start phrase in Import &amp; Parse.</li>
         <li>Prompts written outside a code block on a different line from their label.</li>
         <li>Reels written before a Step 6 heading, so they count as main scenes.</li>
         <li>The same scene number used twice.</li>
@@ -72,7 +72,7 @@
 
   <section aria-labelledby="tpl">
     <div class="sec-head"><h2 class="sec" id="tpl">Minimal template</h2></div>
-    <p class="muted" style="margin:0 0 12px;max-width:64ch">A short skeleton with placeholders in square brackets: 2 chunks, 2 scenes with 1 animation, a thumbnail, publishing text and 1 reel. Replace the brackets with your own text. It uses the default start phrase.</p>
+    <p class="muted" style="margin:0 0 12px;max-width:64ch">A short skeleton with placeholders in square brackets: 2 chunks, 2 scenes with 1 animation, a thumbnail, publishing text and 1 reel. Replace the brackets with your own text.</p>
     <div class="row" style="margin-bottom:10px">
       <button class="btn sm" id="tpl-copy" type="button">Copy template</button>
       <button class="btn sm primary" id="tpl-use" type="button">Use this template in my project</button>
@@ -85,7 +85,7 @@
   <section aria-labelledby="chk">
     <div class="sec-head"><h2 class="sec" id="chk">Check my text</h2></div>
     <p class="muted" style="margin:0 0 12px;max-width:64ch">Paste your own text to see what the real parser finds. It runs in this page only and creates no project.</p>
-    <div class="field" style="max-width:420px;margin-bottom:12px"><label for="chk-phrase">Chunk start phrase</label><input id="chk-phrase" class="input" dir="auto" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></div>
+    <div class="field" style="max-width:420px;margin-bottom:12px"><label for="chk-phrase">Chunk start phrase (optional, older conversations only)</label><input id="chk-phrase" class="input" dir="auto" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"></div>
     <label for="chk-text" class="sr-only">Text to check</label>
     <textarea id="chk-text" class="input" dir="auto" spellcheck="false" placeholder="Paste the reply from your AI director here..." style="min-height:180px"></textarea>
     <div id="chk-out" class="fmt-out" role="status" aria-live="polite"></div>
@@ -93,13 +93,13 @@
 
   <section aria-labelledby="own">
     <div class="card"><h2 id="own" style="font-size:1.1rem">Your own format?</h2>
-      <p class="muted" style="margin:8px 0 0;max-width:64ch">The start phrase and the content language are settings, so a different narrator refrain or language works without any change. If your director writes labels differently, the parser rules can be adapted for your channel. Get in touch through <a href="https://pooya.website">pooya.website</a>.</p>
+      <p class="muted" style="margin:8px 0 0;max-width:64ch">The content language is a setting, so a different language works without any change. If your director writes labels differently, the parser rules can be adapted for your channel. Get in touch through <a href="https://pooya.website">pooya.website</a>.</p>
     </div>
   </section>
 </main>
 <footer class="footer"><div class="wrap"><span>Runs in your browser. Demo by <a href="https://pooya.website">Pooya Nikbakht</a>.</span><span><a href="/">Home</a> &middot; <a href="/demo">Demo</a></span></div></footer>
-<script src="/static/parser.js?v=20261121t"></script>
-<script src="/static/format-template.js?v=20261121t"></script>
-<script src="/static/format.js?v=20261121t"></script>
+<script src="/static/parser.js?v=20261122b"></script>
+<script src="/static/format-template.js?v=20261122b"></script>
+<script src="/static/format.js?v=20261122b"></script>
 </body>
 </html>

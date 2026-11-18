@@ -148,9 +148,56 @@
       .replace(/ /g, " ");
   }
 
+  // "**Audio chunk 3**", "### Audio chunk 3:", "Audio chunk 3 (about 40 s)"; the number is optional for reel audio.
+  const AUDIO_LABEL_RE = /^audio\s*chunk(?:\s*(\d+))?(?![\w])/;
+
+  /**
+   * The text under an "Audio chunk" label on line i: the first fenced code block before `to`, even after a short note.
+   * Without a block, the plain lines up to the next label, heading, rule or scene line. Returns { text, end } (end: next line to read) or null.
+   */
+  function labelledText(lines, mask, folded, i, to) {
+    const stop = (j) => !mask[j] && (/^\s*#{1,6}\s/.test(lines[j]) && !AUDIO_LABEL_RE.test(folded[j]) || /^\s*([-*_])\1{2,}\s*$/.test(lines[j]) ||
+      AUDIO_LABEL_RE.test(folded[j]) || STEP_RE.test(folded[j]) || SCENE_ANY_RE.test(folded[j]) || LABEL_RE.test(folded[j]) || seoLabel(clean(lines[j])) ||
+      (folded[j].length < 80 && (REELS_HEAD_RE.test(folded[j]) || REEL_START_RE.test(folded[j]))));
+    for (let j = i + 1; j < to; j++) {
+      if (mask[j]) {
+        const open = /^\s*(```|~~~)/.exec(lines[j]);
+        let k = j + 1;
+        while (k < lines.length && !(open && new RegExp("^\\s*" + open[1]).test(lines[k]))) k++;
+        const text = lines.slice(j + 1, k).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+        return text ? { text, end: k + 1 } : null;
+      }
+      if (stop(j)) break;
+    }
+    const body = [];
+    let j = i + 1;
+    while (j < to && !mask[j] && !stop(j)) { body.push(stripBold(lines[j]).replace(/^\s*>+\s*/, "")); j++; }
+    const text = body.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    return text ? { text, end: j } : null;
+  }
+
+  /** Chunks written under "**Audio chunk N**" labels in [from, to), numbered by N (a repeated N: the latest wins). */
+  function parseLabelledChunks(lines, mask, from, to) {
+    const folded = lines.map((l) => fold(clean(l)));
+    const out = [], at = new Map();
+    for (let i = from; i < to; i++) {
+      if (mask[i]) continue;
+      const m = AUDIO_LABEL_RE.exec(folded[i]);
+      if (!m || !m[1]) continue;
+      const got = labelledText(lines, mask, folded, i, to);
+      if (!got) continue;
+      const n = parseInt(m[1], 10), c = { n, text: got.text, chars: [...got.text].length };
+      if (at.has(n)) out[at.get(n)] = c; else { at.set(n, out.length); out.push(c); }
+      i = got.end - 1;
+    }
+    return out;
+  }
+
   function parseChunks(lines, mask, startPhrase, from, to) {
     from = from || 0;
     to = to === undefined ? lines.length : to;
+    const labelled = parseLabelledChunks(lines, mask, from, to);
+    if (labelled.length) return labelled;
     const phrase = fold(startPhrase || "");
     if (!phrase) return [];
     const phraseHasNonAscii = /[^\x00-\x7f]/.test(phrase);
@@ -391,7 +438,14 @@
       const a = h.i + 1;
       const b = k + 1 < heads.length ? heads[k + 1].i : to;
       const name = "Reel " + String(h.id).padStart(2, "0");
-      const chunk = parseChunks(lines, mask, startPhrase, a, b)[0];
+      // Reel audio: the block under an "Audio chunk" label (a number is optional), else the start-phrase fallback.
+      let chunk = null, audioFence = -1;
+      for (let i = a; i < b && !chunk; i++) {
+        if (mask[i] || !AUDIO_LABEL_RE.test(folded[i])) continue;
+        const got = labelledText(lines, mask, folded, i, b);
+        if (got) { chunk = { text: got.text, chars: [...got.text].length }; for (let k = i + 1; k < got.end; k++) if (mask[k]) { audioFence = k; break; } }
+      }
+      if (!chunk) chunk = parseChunks(lines, mask, startPhrase, a, b)[0];
       const audio = chunk ? { text: chunk.text, chars: chunk.chars } : null;
       const images = [];
       const videos = [];
@@ -404,6 +458,7 @@
         let end = i + 1;
         while (end < b && !(fence && new RegExp("^\\s*" + fence[1]).test(lines[end]))) end++;
         at = end;
+        if (i === audioFence) continue;
         let kind = "", num = 0, narration = "", label = "";
         for (let j = i - 1; j >= Math.max(a, i - 8) && !mask[j]; j--) {
           const f = folded[j];
@@ -450,7 +505,7 @@
       const seo = parseSeo(lines, mask, a, b);
       if (ranges) ranges.push([h.i, b]);
       if (!cover) warnings.push(name + " has no Reel Cover Prompt.");
-      if (!audio) warnings.push(name + " has no audio chunk. Check the start phrase in the settings.");
+      if (!audio) warnings.push(name + " has no audio chunk. Expected an **Audio chunk** label with the text in a code block.");
       if (images.length < 3 || images.length > 4) warnings.push(name + " has " + images.length + " image prompt(s); 3 to 4 are expected.");
       if (!video) warnings.push(name + " has no vertical animation prompt.");
       return { id: h.id, name, audio, images, video, videos, cover, coverHeadline: seo.coverHeadline, caption: seo.caption };
@@ -481,7 +536,7 @@
 
   /**
    * Parse a pasted conversation.
-   * options.startPhrase: text that opens every audio chunk (default: the demo phrase; /app passes the one saved in Setup).
+   * options.startPhrase: optional fallback for older conversations without "Audio chunk N" labels: text that opens every audio chunk (default: the demo phrase; /app passes the one saved in Setup).
    */
   function parse(text, options) {
     const opts = options || {};
@@ -515,7 +570,7 @@
     reelRanges.forEach(([a, b]) => { for (let i = a; i < b; i++) seoMask[i] = true; });
     const seo = parseSeo(lines, seoMask, 0, lines.length, true);
 
-    if (String(text || "").trim() && !chunks.length) warnings.push("No audio chunks found. Set the chunk start phrase in step 1.");
+    if (String(text || "").trim() && !chunks.length) warnings.push("No audio chunks found. Expected **Audio chunk 1** labels with the text in a code block (or, for older conversations, the chunk start phrase from step 1).");
     scenes.forEach((s) => {
       if (!s.imagePrompt) warnings.push("Scene " + s.number + " has no Image Prompt.");
     });

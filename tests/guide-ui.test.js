@@ -24,14 +24,14 @@ test("guide data: seven steps, each with the three parts, labelled suggestions, 
   assert.ok(!/[؀-ۿ]/.test(src));
 });
 
-test("guide suggestions: model advice, chunk size, warm-up (truthful: no trim setting), banners, Ken Burns", () => {
+test("guide suggestions: model advice, chunk size, no trim setting, banners, Ken Burns", () => {
   const rec = (id) => G.find(id).rec.join("\n");
   assert.match(rec("setup"), /Eleven v4: recommended for Persian narration and expressive storytelling/);
   assert.match(rec("setup"), /Eleven v3 is the previous-generation alternative/);
   assert.match(rec("setup"), /Eleven Flash v2\.5: best for English production/);
   assert.match(rec("setup"), /Multilingual v2: alternative for longer, ultra-stable narration blocks/);
   assert.match(rec("setup"), /800 to 900 character chunks \(under 1,000 characters\)/);
-  assert.match(rec("audio"), /3-sentence warm-up/);
+  assert.ok(!/warm-up/i.test(JSON.stringify(G.GUIDE)), "the warm-up feature is gone");
   assert.ok(!/auto-?trim|built-in trim/i.test(JSON.stringify(G.GUIDE)), "the app has no trim setting, so the guide must not promise one");
   assert.match(rec("board"), /2 to 4 word English title banners/);
   assert.match(rec("assemble"), /Ken Burns/);

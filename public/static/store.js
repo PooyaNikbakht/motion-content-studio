@@ -33,7 +33,6 @@
     model: "eleven_v4",
     stability: 0.5,
     startPhrase: "",
-    dimWarmup: true,
     // Editable credit rates { model: { credits, usd } } over the defaults in estimate.js. Empty means defaults.
     rates: {},
     // AI Director (Gemini). The key stays in this browser and goes only to generativelanguage.googleapis.com.

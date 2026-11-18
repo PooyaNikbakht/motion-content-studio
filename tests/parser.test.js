@@ -12,11 +12,12 @@ test("sample: stats", () => {
   assert.deepEqual(r.warnings, []);
 });
 
-test("sample: chunks start with the phrase and stop at markers", () => {
+test("sample: chunks come from the Audio chunk labels (no phrase) and stop at markers", () => {
   const r = P.parse(sample);
   r.chunks.forEach((c, i) => {
     assert.equal(c.n, i + 1);
-    assert.ok(P.fold(c.text).startsWith(P.fold(P.DEFAULT_START_PHRASE)));
+    assert.ok(!P.fold(c.text).startsWith(P.fold(P.DEFAULT_START_PHRASE)), "no warm-up phrase in the sample");
+    assert.ok(!c.text.includes("```"));
     assert.ok(!c.text.includes("---"));
     assert.ok(!c.text.includes("Director"));
     assert.ok(!c.text.includes("**"));
@@ -51,7 +52,9 @@ test("sample: Step 6 reels stay apart from the main video", () => {
   const r = P.parse(sample);
   assert.deepEqual(r.reels.map((x) => [x.id, x.name]), [[1, "Reel 01"], [2, "Reel 02"], [3, "Reel 03"]]);
   r.reels.forEach((x) => {
-    assert.ok(P.fold(x.audio.text).startsWith(P.fold(P.DEFAULT_START_PHRASE)));
+    assert.ok(!P.fold(x.audio.text).startsWith(P.fold(P.DEFAULT_START_PHRASE)));
+    assert.ok(!x.audio.text.includes("```"));
+    assert.equal(x.images.length >= 3, true);
     assert.equal(x.audio.chars, [...x.audio.text].length);
     assert.ok(x.images.length >= 3 && x.images.length <= 4);
     x.images.forEach((i) => { assert.match(i.prompt, /9:16/); assert.ok(i.narration); assert.ok(!/[؀-ۿ]/.test(i.prompt)); });

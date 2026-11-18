@@ -32,11 +32,14 @@ test("fitsQuota compares the batch with what is left", () => {
   assert.equal(E.fitsQuota(null, 5).fits, false);
 });
 
-test("previewText keeps the warm-up phrase plus the first sentence", () => {
+test("previewText keeps the warm-up phrase plus the first sentence; with no phrase it takes the first two sentences", () => {
   const phrase = "امروز هوا خیلی آرومه";
   const text = phrase + "... قایقی کوچک کنار ساحل بود. جمله دوم نباید بیاید.";
   assert.equal(E.previewText(text, 170, phrase), phrase + " قایقی کوچک کنار ساحل بود.");
-  assert.equal(E.previewText("First one. Second one."), "First one.");
+  assert.equal(E.previewText("First one. Second one. Third one."), "First one. Second one.");
+  assert.equal(E.previewText("First one. Second one. Third one.", 170, ""), "First one. Second one.");
+  assert.equal(E.previewText("Only one sentence here."), "Only one sentence here.");
+  assert.equal(E.previewText("Hello there. First one. Second one.", 170, "Hello there"), "Hello there First one.");
   assert.equal(E.previewText("No end punctuation here"), "No end punctuation here");
 });
 

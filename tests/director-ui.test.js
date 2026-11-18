@@ -44,7 +44,7 @@ test("AI Director mode (app): with a key and a vault prompt Start waits for the 
   assert.equal(h.$("#ad-start").disabled, false);
   assert.equal(h.$("#ad-reason").hidden, true);
   await h.pick("ad-lang", "Persian");
-  assert.match(h.$("#ad-phrase-note").textContent, /No start phrase is set/);
+  assert.match(h.$("#ad-phrase-note").textContent, /Audio chunk N labels.*only needed for older conversations/);
 });
 
 test("Paste Conversation mode keeps the original screen intact and the choice is remembered per project", { skip }, async () => {

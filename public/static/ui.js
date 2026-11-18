@@ -74,9 +74,9 @@
   const pageHead = (title, text, guide) => '<header class="pagehead"><h2>' + esc(title) + (guide ? ' <button type="button" class="guide-help" data-guide="' + guide + '" aria-haspopup="dialog" aria-label="Open the guide for ' + esc(title) + '" title="Open the guide for ' + esc(title) + '">?</button>' : "") + "</h2><p>" + esc(text) + "</p></header>";
   const secHead = (label, extra) => '<div class="sec-head"><h3 class="sec">' + esc(label) + "</h3>" + (extra ? '<span class="small muted">' + extra + "</span>" : "") + "</div>";
   // Long text is clamped to 3 lines with a Show more toggle; the open state survives re-renders via rt.open.
-  function clampHtml(id, text, extra, warm) {
+  function clampHtml(id, text, extra) {
     const long = text.length > 240 || text.split("\n").length > 3, open = !!rt.open[id];
-    return '<div class="clamp ' + contentClass() + (extra ? " " + extra : "") + (long ? " long" : "") + (open ? " open" : "") + '" dir="' + dirAttr() + '">' + (warm ? warmHtml(text) : esc(text)) + "</div>" +
+    return '<div class="clamp ' + contentClass() + (extra ? " " + extra : "") + (long ? " long" : "") + (open ? " open" : "") + '" dir="' + dirAttr() + '">' + esc(text) + "</div>" +
       (long ? '<button type="button" class="more" data-more="' + id + '" aria-expanded="' + open + '">' + (open ? "Show less" : "Show more") + "</button>" : "");
   }
 
@@ -104,16 +104,18 @@
   // (set once in Setup), so there is no built-in phrase in a public file. Empty means no chunks are found, and the UI says so.
   // Per project (proj.ext.startPhrase, saved and exported with the project); the Setup default is only the fallback and the value new projects start from.
   const projPhrase = () => ((proj && proj.ext && proj.ext.startPhrase) || "").trim();
-  function startPhrase() { return projPhrase() || settings.startPhrase.trim() || (DEMO ? P.DEFAULT_START_PHRASE : ""); }
+  function startPhrase() { return projPhrase() || settings.startPhrase.trim(); }
+  // Audio chunks are found by their "Audio chunk N" labels; the phrase is only the fallback for older conversations (/demo keeps the sample phrase for those).
+  const parsePhrase = () => startPhrase() || (DEMO ? P.DEFAULT_START_PHRASE : "");
   function setProjPhrase(v) { proj.ext = Object.assign({}, proj.ext, { startPhrase: v }); adSaveSoon(); }
-  // The sample and the templates use the sample's phrase: set it for this project only, leaving the global default and the user's own phrase alone.
-  function useSamplePhrase() { setProjPhrase(P.DEFAULT_START_PHRASE); rt.phraseNote = proj.id; }
+  // True when the parse found no audio chunks and no phrase is set to look for (the labels are what the Director Prompt writes).
+  const noChunksNoPhrase = () => !startPhrase() && !chunks().length;
   // No phrase in /app: say so where the phrase is set instead of quietly finding 0 chunks.
   function phraseNeeded() {
     rt.phraseErr = proj.id;
     const f = $("#phrase");
     if (tab === "import" && f) { const e = $("#phrase-err"); if (e) e.hidden = false; f.focus(); }
-    else toast("Set the chunk start phrase (step 1) to find audio chunks.");
+    else toast("No audio chunks found. Expected Audio chunk 1 labels with the text in a code block, or set the chunk start phrase (step 1) for older conversations.");
   }
   const chunks = () => (proj.parsed ? proj.parsed.chunks : []);
   const scenes = () => (proj.parsed ? proj.parsed.scenes : []);
@@ -124,23 +126,6 @@
   const reelsWithAudio = () => reels().filter((r) => r.audio);
   const rKey = (id) => "r" + id;
   const rprog = () => proj.reelProgress || (proj.reelProgress = {});
-
-  // Leading start phrase rendered as a muted span (display only: the text sent to ElevenLabs and the counts stay whole).
-  function warmHtml(text) {
-    if (!settings.dimWarmup) return esc(text);
-    const s = P.splitWarmup(text, startPhrase());
-    return s.warm ? '<span class="warmup" title="Warm-up phrase. Still sent to ElevenLabs.">' + esc(s.warm) + "</span>" + esc(s.rest) : esc(text);
-  }
-  const dimToggle = () => '<label class="row small dimtoggle"><input type="checkbox" data-dim' + (settings.dimWarmup ? " checked" : "") + "> Dim warm-up phrase</label>";
-  function bindDim(p) {
-    $$("[data-dim]", p).forEach((box) => box.addEventListener("change", () => {
-      settings.dimWarmup = box.checked;
-      store.saveSettings(settings);
-      renderTab();
-      const again = $("[data-dim]");
-      if (again) again.focus();
-    }));
-  }
 
   function copyBtn(text, label) {
     copyList.push(text);
@@ -451,7 +436,7 @@
     if (!proj.ext) proj.ext = {};
     // Projects parsed before the Reels package, multi-prompt reels or reel covers existed: parse again to fill them in.
     if (proj.text && proj.parsed && (!proj.parsed.reels || proj.parsed.reels.some((r) => !r.videos || r.cover === undefined || r.caption === undefined) || proj.parsed.youtubeTitle === undefined)) {
-      proj.parsed = P.parse(proj.text, { startPhrase: startPhrase() });
+      proj.parsed = P.parse(proj.text, { startPhrase: parsePhrase() });
       proj.reelProgress = G.mergeReels(rprog(), reels());
       if (DEMO) await saveProject().catch(() => {}); // /app: not a person's edit, so it does not count as unsaved; it is redone on the next open
     }
@@ -467,7 +452,7 @@
   async function addProject(name, text, folderId) {
     const p = store.newProject(name);
     if (folderId) p.folderId = folderId;
-    if (text) { p.text = text; p.parsed = P.parse(text, { startPhrase: startPhrase() }); }
+    if (text) { p.text = text; p.parsed = P.parse(text, { startPhrase: parsePhrase() }); }
     await store.putProject(p);
     projects.push(p);
     syncSave();
@@ -1214,7 +1199,6 @@
     refreshCounts();
     ({ overview: renderOverview, setup: renderSetup, import: renderImport, "youtube-audio": renderAudio, "youtube-board": renderBoard, "youtube-covers": renderCovers, reels: renderReels })[view()](host);
     bindCopy(host);
-    bindDim(host);
     bindDrop(host);
     icons();
     updateRunStat();
@@ -1345,9 +1329,9 @@
   /** Parses `text` into the project. Asks first when that would cost progress, audio or publishing info. Returns false when cancelled. */
   async function requestParse(text) {
     if (guardRunning()) return false;
-    const next = text.trim() ? P.parse(text, { startPhrase: startPhrase() }) : null;
+    const next = text.trim() ? P.parse(text, { startPhrase: parsePhrase() }) : null;
     const d = D.diff(proj.parsed, next), sum = D.summarize(d), imp = D.impact(proj);
-    if (proj.parsed && text === proj.text && !D.isChange(sum) && !rt.phraseDirty[proj.id]) { setDraft(text); toast("Nothing changed."); if (text.trim() && !startPhrase()) phraseNeeded(); return true; }
+    if (proj.parsed && text === proj.text && !D.isChange(sum) && !rt.phraseDirty[proj.id]) { setDraft(text); toast("Nothing changed."); if (text.trim() && noChunksNoPhrase()) phraseNeeded(); return true; }
     const mediaN = Object.keys((proj.ext && proj.ext.media) || {}).length;
     if (proj.parsed && (imp.ticks || imp.audio || imp.published || mediaN)) {
       const c = D.carry(proj, d, next);
@@ -1379,7 +1363,7 @@
     if (had && (imp.ticks || imp.audio || imp.published || mediaN)) toast("Replaced.", { label: "Undo", run: undoParse }, 10000); else toast(next ? "Parsed." : "Cleared.");
     renderTree();
     if (tab === "import") renderTab(); else refreshCounts();
-    if (text.trim() && !startPhrase()) phraseNeeded();
+    if (text.trim() && noChunksNoPhrase()) phraseNeeded();
     return true;
   }
 
@@ -1442,11 +1426,10 @@
     p.innerHTML =
       '<section class="step step-setup" aria-labelledby="imp1"><div class="step-head"><span class="step-chip" aria-hidden="true">1</span><h3 id="imp1">Language and start phrase</h3></div><div class="grid2">' +
       '<div class="field"><label for="lang">Content language</label>' + ddHtml("lang", "", "") + '<span class="hint">Sets the font for narration only; each line picks its own direction. Prompts stay left to right.</span></div>' +
-      '<div class="field"><label for="phrase">Chunk start phrase</label>' +
-      '<input id="phrase" class="input script-arabic" dir="auto" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value="' + esc(projPhrase() || settings.startPhrase) + '" placeholder="' + esc(DEMO ? P.DEFAULT_START_PHRASE : "The phrase every chunk starts with") + '" aria-describedby="phrase-err phrase-note">' +
-      '<span class="field-err" id="phrase-err" role="alert"' + (rt.phraseErr === proj.id && !startPhrase() ? "" : " hidden") + '>Set the chunk start phrase (step 1) to find audio chunks</span>' +
-      '<span class="hint" id="phrase-note"' + (rt.phraseNote === proj.id ? "" : " hidden") + ">Start phrase set to the sample's phrase for this project</span>" +
-      '<span class="hint">' + (DEMO ? "Every chunk starts with this phrase. Leave empty for the demo phrase shown. Saved with this project. Press Parse after changing it." : "Every chunk starts with this phrase, so it is required: without it no chunks are found. It is saved with this project; the first phrase you set also becomes the default for new projects. Press Parse after changing it.") + '</span></div>' +
+      '<div class="field"><label for="phrase">Chunk start phrase (optional, for older conversations)</label>' +
+      '<input id="phrase" class="input script-arabic" dir="auto" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value="' + esc(projPhrase() || settings.startPhrase) + '" placeholder="' + esc(DEMO ? P.DEFAULT_START_PHRASE : "Only for older conversations") + '" aria-describedby="phrase-err">' +
+      '<span class="field-err" id="phrase-err" role="alert"' + (rt.phraseErr === proj.id && !startPhrase() ? "" : " hidden") + '>No audio chunks found. Use Audio chunk labels with the text in a code block, or set the start phrase for an older conversation</span>' +
+      '<span class="hint">Audio chunks are found by their <strong>Audio chunk N</strong> labels, with the text in a code block. Set this only for an older conversation where every chunk starts with the same phrase. Saved with this project. Press Parse after changing it.</span></div>' +
       '</div></section>' +
       '<section class="step step-generate" aria-labelledby="imp2"><div class="step-head"><span class="step-chip" aria-hidden="true">2</span><h3 id="imp2">Paste the conversation</h3><span class="step-tools"><button type="button" class="btn sm ghost" data-fmt>' + icon("book-open") + "Input format guide</button></span></div>" +
       '<div class="field"><label for="paste" class="sr-only">Full reply from your AI director</label>' +
@@ -1478,7 +1461,7 @@
       badge.className = "state-badge " + (st === "parsed" ? "ready" : "needs");
       const pre = $("#parse-preview", p);
       if (ta.value.trim() && st !== "parsed") {
-        const r = P.parse(ta.value, { startPhrase: startPhrase() }).stats;
+        const r = P.parse(ta.value, { startPhrase: parsePhrase() }).stats;
         pre.textContent = "Preview (not saved): " + r.audioChunks + " chunks, " + r.imageScenes + " scenes, " + r.reels + " reels.";
       } else pre.textContent = "";
       oldHint();
@@ -1494,12 +1477,12 @@
       setProjPhrase(e.target.value);
       if (!settings.startPhrase.trim()) { settings.startPhrase = e.target.value; store.saveSettings(settings); }
       rt.phraseDirty[proj.id] = true;
-      if (e.target.value.trim()) { $("#phrase-err", p).hidden = true; $("#phrase-note", p).hidden = true; delete rt.phraseNote; }
+      if (e.target.value.trim()) { $("#phrase-err", p).hidden = true; }
       clearTimeout(timer);
       timer = setTimeout(refreshDraft, 300);
     });
     const loadLatest = async () => {
-      try { const t = await fetchSample(); useSamplePhrase(); await commitText(t); toast("Sample loaded. All content in it is fictional."); } catch { toast("Could not load the sample."); }
+      try { const t = await fetchSample(); await commitText(t); toast("Sample loaded. All content in it is fictional."); } catch { toast("Could not load the sample."); }
     };
     $("#load-sample", p).addEventListener("click", loadLatest);
     $("#update-sample", p).addEventListener("click", loadLatest);
@@ -1735,7 +1718,7 @@
     ad.expectProj = proj.id;
     ad.runner = MBSDR.createRunner({
       turn: (req) => (DEMO ? adSimTurn(req) : adGeminiTurn(req)),
-      parse: (t) => P.parse(t, { startPhrase: startPhrase() }),
+      parse: (t) => P.parse(t, { startPhrase: parsePhrase() }),
       cost: (u, model) => E.geminiCost(u, adRateFor(model)),
       route: () => settings.geminiRoute,
       pauseEach: () => !!dirUi().pauseEach,
@@ -1825,7 +1808,7 @@
       '<div id="ad-root" class="page">' +
       '<section class="step step-setup" aria-labelledby="ad1"><div class="step-head"><span class="step-chip" aria-hidden="true">1</span><h3 id="ad1">Output language</h3></div>' +
       '<div class="grid2"><div class="field"><label for="ad-lang">Language of the book package</label>' + ddHtml("ad-lang", "", "") + '<span class="hint">' + (DEMO ? "The demo director always answers in English." : "Sent to the director in the first message.") + '</span></div>' +
-      '<div class="field"><span class="label">Start phrase</span><span class="hint" id="ad-phrase-note" style="margin:0"></span></div></div></section>' +
+      '<div class="field"><span class="label">Chunk detection</span><span class="hint" id="ad-phrase-note" style="margin:0"></span></div></div></section>' +
       '<section class="step step-setup" aria-labelledby="ad2"><div class="step-head"><span class="step-chip" aria-hidden="true">2</span><h3 id="ad2">The book</h3></div>' +
       '<div class="dropzone" id="ad-drop" tabindex="0" role="button" aria-label="Add the book as a PDF. Drop it here or press Enter to choose it." style="margin:0 0 8px">' + icon("file-up") + '<div><strong>Drop the book PDF here, or choose a file</strong><span class="hint">Up to 50 MB or 1,000 pages. ' + (DEMO ? "In this demo the file is not sent anywhere." : "Under about 14 MB it is sent inline; larger files are uploaded once to Gemini.") + '</span></div><input type="file" id="ad-file" hidden accept="application/pdf,.pdf"></div>' +
       '<p class="small" id="ad-pdfinfo" hidden><span id="ad-pdfname"></span> <button type="button" class="btn sm ghost" id="ad-pdfrm">Remove</button><br><span class="hint" id="ad-pdfhow"></span></p>' +
@@ -1919,12 +1902,7 @@
     const el = $("#ad-phrase-note");
     if (!el) return;
     const ph = startPhrase();
-    if (adLang() === "en" && !ph) { el.textContent = "English runs need no start phrase unless your prompt makes every chunk start with one."; return; }
-    el.innerHTML = ph
-      ? "Chunks are found by this phrase: <span class=\"mono\" dir=\"auto\">" + esc(ph) + "</span>" + (DEMO ? "" : ". It comes from your start phrase setting.") + ""
-      : "No start phrase is set, so no audio chunks can be found yet. <button type=\"button\" class=\"btn sm\" id=\"ad-phrase-go\">Set it in Paste Conversation, step 1</button> (once; it is saved in this browser)";
-    const b = $("#ad-phrase-go");
-    if (b) b.addEventListener("click", () => { dirUi().mode = "paste"; adSaveSoon(); renderTab(); const f = $("#phrase"); if (f) f.focus(); });
+    el.innerHTML = "Audio chunks are found by their Audio chunk N labels." + (ph ? " Older conversations without labels use this phrase: <span class=\"mono\" dir=\"auto\">" + esc(ph) + "</span>" : " A start phrase is only needed for older conversations.");
   }
 
   const modeBtn = (id, on, label) => '<button type="button" class="btn" id="mode-' + id + '" aria-pressed="' + on + '">' + label + "</button>";
@@ -1992,7 +1970,7 @@
         '<div class="subsec">' + ratesHtml() +
         '<div class="plan" id="plan"><div class="plan-top"><strong>Your plan</strong><button type="button" class="btn sm" id="sub-refresh">' + icon("refresh-cw") + 'Refresh</button></div><p id="sub-panel" class="small" role="status" aria-live="polite"></p></div></div>', st.ok) +
       card(2, "Gemini AI Director", '<span class="state-badge ' + (gst.ok ? "ready" : "needs") + '" id="g-state">' + esc(gst.text) + '</span><span class="step-sum" id="g-summary">' + esc(geminiSummary()) + "</span>", geminiCardHtml(), gst.ok) +
-      card(3, "Output folder and audio preferences", "", '<div class="step-row">' + folderRow() + "</div>" + '<div style="margin-top:12px">' + dimToggle() + "</div>", true) +
+      card(3, "Output folder and audio preferences", "", '<div class="step-row">' + folderRow() + "</div>", true) +
       card(4, "Master Director Prompt", "", '<div id="sv-body"><p class="hint">Loading...</p></div>', true);
   }
 
@@ -2330,7 +2308,7 @@
       id, attrs: ' data-status="' + st + '" data-key="' + key + '"', title: label,
       meta: chars.toLocaleString() + " characters",
       pill: '<span class="pill ' + st + '" role="status">' + STATUS_LABEL[st] + "</span>",
-      body: clampHtml(id, text, "", true) +
+      body: clampHtml(id, text, "") +
         (st === "error" && rt.errors[key] ? '<div class="errtext" role="alert">' + esc(rt.errors[key]) + "</div>" : "") +
         '<div class="est-lines"><div class="est-line"><span data-est-a>' + esc(x.first) + '</span><button type="button" class="btn sm ghost" data-preview="' + key + '"' + (busy || previewing ? " disabled" : "") + ' title="Generates only the warm-up phrase and the first sentence. Not saved.">' + icon("play") + (previewing ? "Generating preview..." : "Preview first 10 s") + '</button></div><div class="est-line"><span data-est-b>' + esc(x.full) + "</span></div></div>" +
         (used ? '<div class="hint used" data-used>Generated with ' + esc(used) + "</div>" : "") +
@@ -2454,7 +2432,7 @@
   function audioWorkflowHtml(reelsV, listLabel, countText, listHtml) {
     return setupLineHtml() + generateCardHtml(reelsV) +
       '<section class="step step-review" aria-labelledby="step3-title"><div class="step-head"><span class="step-chip" aria-hidden="true">2</span><h3 id="step3-title">Review and save</h3>' +
-      '<span class="small muted">' + esc(listLabel) + (countText ? " &middot; " + esc(countText) : "") + '</span><span class="step-tools">' + dimToggle() + "</span></div>" + listHtml + "</section>";
+      '<span class="small muted">' + esc(listLabel) + (countText ? " &middot; " + esc(countText) : "") + '</span></div>' + listHtml + "</section>";
   }
   function bindAudioWorkflow(p, reelsV) {
     $(reelsV ? "#run-reels" : "#run", p).addEventListener("click", () => (rt.run.active ? stopQueue() : startQueue(reelsV ? "reels" : "main")));
@@ -2994,7 +2972,7 @@
     return itemCardHtml({
       id: "scene-" + s.number, attrs: ' data-status="' + st + '"' + (s.hasVideo ? ' data-flow="true"' : ""), title: "Scene " + pad(s.number), ratio: "16:9", flow: s.hasVideo,
       pill: '<span class="pill st st-' + st + '" data-pill>' + STATUS_TEXT[st] + "</span>",
-      narration: s.narration ? warmHtml(s.narration) : "(no narration found)",
+      narration: s.narration ? esc(s.narration) : "(no narration found)",
       prompts: [{ label: "Image prompt", text: s.imagePrompt }].concat(s.hasVideo ? [{ label: "Video prompt", text: s.videoPrompt }] : []),
       chips: G.kindsFor(s).map(chip), chipsLabel: "Progress for scene " + s.number,
       extra: slotsHtml(["s-" + s.number + "-image"].concat(s.hasVideo ? ["s-" + s.number + "-video"] : [])),
@@ -3025,7 +3003,6 @@
       '<section><div class="board-controls row">' +
       '<div class="seg" role="group" aria-label="Filter scenes">' + FILTERS.map((f) => '<button type="button" class="btn sm" data-filter="' + f[0] + '" aria-pressed="' + (rt.boardFilter === f[0]) + '">' + f[1] + "</button>").join("") + "</div>" +
       '<label class="row small" style="gap:8px"><input type="checkbox" id="only-anim"' + (rt.onlyAnim ? " checked" : "") + '> Only Flow scenes</label>' +
-      dimToggle() +
       '<button type="button" class="btn sm" id="copy-all-img">' + icon("list-ordered") + "Copy all image prompts</button>" +
       '<button type="button" class="btn sm" id="board-csv">' + icon("file-spreadsheet") + "Download CSV</button>" +
       '</div>' +
@@ -3967,7 +3944,6 @@
   async function applyTemplate(text) {
     if (proj.text && proj.text.trim() && !(await ask({ title: "Replace the pasted text with the template?", text: "The current text in this project will be replaced.", confirm: "Replace" }))) return false;
     setTab("import");
-    useSamplePhrase();
     const ok = await commitText(text);
     if (ok) toast("Template loaded. Replace the [bracketed] parts with your own text.");
     return ok;

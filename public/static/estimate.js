@@ -97,7 +97,7 @@
 
   /**
    * A short slice of a chunk for a cheap voice check: the warm-up phrase (when the text starts with it) plus the
-   * first sentence after it, cut at a word boundary to at most n characters (about 10 seconds of speech at 170).
+   * first sentence after it (no phrase: the first two sentences), cut at a word boundary to at most n characters (about 10 seconds of speech at 170).
    */
   function previewText(text, n, startPhrase) {
     n = n || PREVIEW_CHARS;
@@ -106,7 +106,9 @@
     let warm = "", rest = t;
     if (phrase && t.startsWith(phrase)) { warm = phrase; rest = t.slice(phrase.length).replace(/^[\s.,\u060C\u061B:;…-]+/, ""); }
     const cps = [...rest];
+    // With a warm-up phrase: it plus one sentence. Without one: the first two sentences (the cut below still caps the length).
     let end = cps.findIndex((c) => SENTENCE_END.test(c));
+    if (end >= 0 && !phrase) { const next = cps.findIndex((c, i) => i > end && SENTENCE_END.test(c)); end = next < 0 ? cps.length - 1 : next; }
     end = end < 0 ? cps.length : end + 1;
     const out = (warm ? warm + " " : "") + cps.slice(0, end).join("").trim();
     const all = [...out];

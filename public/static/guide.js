@@ -22,8 +22,8 @@
         you: "Create a Gemini API key in Google AI Studio and an ElevenLabs API key in your ElevenLabs account. Write or paste your Master Director Prompt (the instructions the AI director follows).",
         rec: [
           "Gemini routing: Gemini 3.8 Flash for the cheap bulk stages (3 to 6), 4 Carbon for the stages where quality matters most (1 architecture and 2 script). The Recommended Smart Hybrid preset does this.",
-          "Eleven v4: recommended for Persian narration and expressive storytelling (pairs with the 3-sentence Persian warm-up your Master Prompt puts at the start of each chunk). Eleven v3 is the previous-generation alternative (audio tags, 5,000 character limit).",
-          "Eleven Flash v2.5: best for English production (fast, natural, about 50% lower cost, no warm-up sentences needed).",
+          "Eleven v4: recommended for Persian narration and expressive storytelling. Eleven v3 is the previous-generation alternative (audio tags, 5,000 character limit).",
+          "Eleven Flash v2.5: best for English production (fast, natural, about 50% lower cost).",
           "Multilingual v2: alternative for longer, ultra-stable narration blocks.",
           "Our Master Prompt slices audio into about 800 to 900 character chunks (under 1,000 characters) for maximum voice stability, well below each model's hard API cap (5,000 for v3, 10,000 for v4 and Multilingual v2, 40,000 for Flash v2.5). Chunks over the cap of the chosen model are flagged.",
         ],
@@ -47,7 +47,6 @@
         rec: [
           "Generate one or two chunks first, listen, then queue the rest.",
           "Keep chunks under the per-request limit of your model (5,000 for v3, 10,000 for v4 and Multilingual v2, or 40,000 for Flash v2.5).",
-          "For Persian projects on Eleven v4 or v3, keep the 3-sentence warm-up in each chunk for a stable voice tone. The app dims it in the text (Setup, Dim warm-up phrase) so you can cut it in your audio editor; it does not trim it for you.",
         ],
         demo: "The demo generates short placeholder tones, not speech, and makes no ElevenLabs calls.",
       },

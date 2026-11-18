@@ -4,16 +4,13 @@
 (function () {
   "use strict";
   const P = window.MBSParser, T = window.MBSTemplate;
-  const phrase = P.DEFAULT_START_PHRASE;
-  const template = T.buildTemplate(phrase);
+  const template = T.buildTemplate();
 
   function init(root, opts) {
   const $ = (s) => root.querySelector(s);
   const mode = opts.mode;
 
-  $("#dflt-phrase").textContent = phrase;
   $("#tpl-text").textContent = template;
-  $("#chk-phrase").value = phrase;
 
   const flip = $("#tpl-switch");
   const label = () => {
@@ -35,7 +32,7 @@
   function check() {
     out.textContent = "";
     if (!ta.value.trim()) return;
-    const r = P.parse(ta.value, { startPhrase: ph.value.trim() === "" ? phrase : ph.value.trim() });
+    const r = P.parse(ta.value, { startPhrase: ph.value.trim() });
     const s = r.stats;
     const stats = add(out, "div", "", "stats");
     [[s.audioChunks, "Audio chunks"], [s.imageScenes, "Image scenes"], [s.animations, "Animations"], [s.reels, "Reels (9:16)"], [s.reelAudio, "Reel audio"]].forEach((x) => {

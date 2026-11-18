@@ -21,7 +21,7 @@
     "Work in six stages. After each stage, stop and wait for the word Continue.",
     "",
     "Stage 1. Script chunks",
-    "Write the narration in numbered chunks. Start every chunk with the same warm-up phrase.",
+    "Write the narration in numbered chunks. Label each one **Audio chunk N** and put its text in a code block.",
     "Keep each chunk under 4,500 characters.",
     "",
     "Stage 2. 16:9 image scenes",
