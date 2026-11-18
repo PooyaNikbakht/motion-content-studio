@@ -1,12 +1,12 @@
 # Testing
 
-## Unit and integration (347 tests)
+## Unit and integration (375 tests)
 
 ```bash
 npm test
 ```
 
-Runs Node's built-in test runner on `tests/*.test.js` and `tests/*.test.mjs` (37 files). Coverage includes:
+Runs Node's built-in test runner on `tests/*.test.js` and `tests/*.test.mjs` (39 files). Coverage includes:
 
 - Parser, diff, progress, tree, overview, project export and import, prompts, quality, queue, estimate, routing, vault, format template.
 - Worker: `/api` guards and routes against in-memory D1 and R2 stubs (`api.test.mjs`), auth (`auth.test.mjs`), share links, daily backup.

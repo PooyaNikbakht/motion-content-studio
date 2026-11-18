@@ -31,6 +31,8 @@
     apiKey: "",
     voiceId: "",
     model: "eleven_v4",
+    // Model for quick previews and voice tests (Flash: half the credits). Never used for full chunks. A saved settings object without it gets this default.
+    previewModel: "eleven_flash_v2_5",
     stability: 0.5,
     startPhrase: "",
     // Editable credit rates { model: { credits, usd } } over the defaults in estimate.js. Empty means defaults.

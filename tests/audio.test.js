@@ -33,3 +33,14 @@ test("subscription fails with a TtsError when the key cannot read it or the answ
   globalThis.fetch = async () => { throw new TypeError("offline"); };
   await assert.rejects(A.subscription("k"), (e) => e.retryable === true);
 });
+
+test("preview model defaults to Flash, stays valid for every model, and Flash is priced at half", () => {
+  const E = require("../public/static/estimate.js");
+  assert.equal(A.PREVIEW_MODEL, "eleven_flash_v2_5");
+  assert.equal(E.PREVIEW_MODEL, "eleven_flash_v2_5");
+  assert.equal(E.estimate(["x".repeat(100)], A.PREVIEW_MODEL, {}).credits, 50);
+  assert.equal(E.estimate(["x".repeat(100)], "eleven_v4", {}).credits, 100);
+  for (const m of Object.keys(A.MODELS)) assert.ok(A.MODELS[m].maxChars >= 170);
+  assert.equal(A.snapStability(A.PREVIEW_MODEL, 0.5), 0.5);
+  assert.equal(A.snapStability("eleven_v3", 0.37), 0.5);
+});

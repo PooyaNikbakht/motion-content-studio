@@ -48,6 +48,8 @@
   /** Assumed monthly allowance of the Free plan, used in /demo where there is no key to ask. */
   const FREE_PLAN_CREDITS = 10000;
   const PREVIEW_CHARS = 170;
+  // Every quick voice preview runs on Flash (half the credits), whatever the default model or the run override is.
+  const PREVIEW_MODEL = "eleven_flash_v2_5";
 
   const chars = (text) => [...String(text == null ? "" : text)].length;
   const num = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : d; };
@@ -172,5 +174,5 @@
 
   const kTokens = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1000 ? Math.round(n / 1000) + "k" : String(Math.round(n)));
 
-  return { DEFAULT_GEMINI_RATES, GEMINI_TIER_TOKENS, DIRECTOR_ASSUMPTIONS, normalizeGeminiRates, geminiRateFor, geminiCost, geminiTotals, projectGeminiRun, approxTokens, kTokens, DEFAULT_RATES, FREE_PLAN_CREDITS, PREVIEW_CHARS, chars, normalizeRates, rateFor, estimate, fitsQuota, resetText, fmt, usdText, usdApprox, previewText };
+  return { DEFAULT_GEMINI_RATES, GEMINI_TIER_TOKENS, DIRECTOR_ASSUMPTIONS, normalizeGeminiRates, geminiRateFor, geminiCost, geminiTotals, projectGeminiRun, approxTokens, kTokens, DEFAULT_RATES, FREE_PLAN_CREDITS, PREVIEW_CHARS, PREVIEW_MODEL, chars, normalizeRates, rateFor, estimate, fitsQuota, resetText, fmt, usdText, usdApprox, previewText };
 });

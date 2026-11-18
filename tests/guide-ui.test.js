@@ -26,9 +26,9 @@ test("guide data: seven steps, each with the three parts, labelled suggestions, 
 
 test("guide suggestions: model advice, chunk size, no trim setting, banners, Ken Burns", () => {
   const rec = (id) => G.find(id).rec.join("\n");
-  assert.match(rec("setup"), /Eleven v4: recommended for Persian narration and expressive storytelling/);
+  assert.match(rec("setup"), /Eleven v4 is the default for all real narration, Persian and English/);
   assert.match(rec("setup"), /Eleven v3 is the previous-generation alternative/);
-  assert.match(rec("setup"), /Eleven Flash v2\.5: best for English production/);
+  assert.match(rec("setup"), /Eleven Flash v2\.5: the default Preview model/);
   assert.match(rec("setup"), /Multilingual v2: alternative for longer, ultra-stable narration blocks/);
   assert.match(rec("setup"), /800 to 900 character chunks \(under 1,000 characters\)/);
   assert.ok(!/warm-up/i.test(JSON.stringify(G.GUIDE)), "the warm-up feature is gone");

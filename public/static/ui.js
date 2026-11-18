@@ -54,7 +54,7 @@
   // Inside each reel: Audio | Visual Board | Cover & Captions. One choice for all reels, so Reel 01 > Visual Board then Reel 02 opens its Visual Board.
   const RSUBS = [["audio", "Audio", "audio-lines"], ["visual", "Visual Board", "layout-grid"], ["cover", "Cover & Captions", "image"]];
   let reelSub = "audio";
-  const rt = { status: {}, errors: {}, urls: {}, dir: null, run: { active: false, stopping: false, abort: null, kind: "main" }, onlyAnim: false, boardFilter: "all", open: {}, settingsOpen: null, q: "", sbCollapsed: store.getSidebarCollapsed(), drawer: false, treeFocus: null, dragId: null, menu: null, sub: null, previews: {}, previewBusy: null, pipe: { running: false, timer: null }, ovr: null, tabId: null, thumbs: {}, origs: {}, uploads: {}, strays: null, warnedAllowance: false, warnedSoft: false, storage: null };
+  const rt = { status: {}, errors: {}, urls: {}, dir: null, run: { active: false, stopping: false, abort: null, kind: "main" }, onlyAnim: false, boardFilter: "all", open: {}, settingsOpen: null, q: "", sbCollapsed: store.getSidebarCollapsed(), drawer: false, treeFocus: null, dragId: null, menu: null, sub: null, previews: {}, previewBusy: null, pipe: { running: false, timer: null }, ovr: null, previewModel: null, tabId: null, thumbs: {}, origs: {}, uploads: {}, strays: null, warnedAllowance: false, warnedSoft: false, storage: null };
   try { rt.tabId = sessionStorage.getItem("mbs:tab") || (sessionStorage.setItem("mbs:tab", "t" + Math.random().toString(36).slice(2, 10)), sessionStorage.getItem("mbs:tab")); } catch { /* storage blocked */ }
   rt.tabId = rt.tabId || "t" + Math.random().toString(36).slice(2, 10);
   let copyList = [];
@@ -1925,6 +1925,9 @@
   // ---------- Audio (YouTube chunks and Reels audio share the settings, folder and queue) ----------
   // The settings a run uses: the global defaults from Setup, with this page session's "Custom for this run" overrides on top.
   const eff = () => Object.assign({}, settings, rt.ovr || {});
+  // The model for quick previews: the session pick (rt.previewModel) over the Setup preview model over Flash. Never touches settings.model or rt.ovr.
+  const pvModel = () => (A.MODELS[rt.previewModel] ? rt.previewModel : A.MODELS[settings.previewModel] ? settings.previewModel : A.PREVIEW_MODEL);
+  const pvName = (m) => (m === "eleven_flash_v2_5" ? "Flash, half the credits" : m);
   const stabilityText = (model, v) => (model === "eleven_v3" ? v.toFixed(1) + " (" + A.V3_PRESETS[v] + ")" : v.toFixed(2));
 
   // Collapsible Setup cards. The open or closed choice is kept per card in this browser (localStorage, by mode); until a card has a choice,
@@ -1963,6 +1966,8 @@
         '<div class="field"><label for="s-voice">Voice ID</label><input id="s-voice" class="input mono" autocomplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" spellcheck="false" ' + (DEMO ? 'disabled placeholder="Not needed in the demo"' : 'value="' + esc(settings.voiceId) + '"') + "></div>" +
         '<div class="field"><label for="s-model">Default model</label>' + ddHtml("s-model", "", "") +
         '<span class="hint" id="s-model-hint">' + A.MODELS[settings.model].maxChars.toLocaleString() + " characters per chunk at most.</span></div>" +
+        '<div class="field"><label for="s-preview-model">Preview model</label>' + ddHtml("s-preview-model", "", "") +
+        '<span class="hint">Used only for quick previews and voice tests (default Flash, half the credits). Full chunks always use the default model above.</span></div>' +
         '<div class="field"><label for="s-stab">Default stability: <output id="s-stab-out">' + stabilityText(settings.model, settings.stability) + '</output></label>' +
         '<input id="s-stab" type="range" min="0" max="1" step="' + (v3 ? "0.5" : "0.05") + '" value="' + settings.stability + '">' +
         '<span class="hint" id="s-stab-hint">' + (v3 ? "Eleven v3 only accepts 0.0 (Creative), 0.5 (Natural) or 1.0 (Robust)." : "Lower is more expressive, higher is more even.") + "</span></div></div>" +
@@ -2254,6 +2259,7 @@
       $("#s-model-hint", p).textContent = A.MODELS[settings.model].maxChars.toLocaleString() + " characters per chunk at most.";
       refreshCredits();
     });
+    ddInit("s-preview-model", Object.keys(A.MODELS).map((k) => [k, k + " - " + A.MODELS[k].label]), A.MODELS[settings.previewModel] ? settings.previewModel : A.PREVIEW_MODEL, (val) => { settings.previewModel = val; save(); });
     bindRates(p);
     stab.addEventListener("input", () => {
       settings.stability = A.snapStability(settings.model, stab.value);
@@ -2292,9 +2298,9 @@
   // The two estimate lines every audio card shows: the first 10 s (the preview) and the full chunk, with the effective model and the editable rates.
   function estParts(text) {
     const e = eff(), pv = E.previewText(text, E.PREVIEW_CHARS, startPhrase());
-    const a = E.estimate([pv], e.model, settings.rates), b = E.estimate([text], e.model, settings.rates);
+    const a = E.estimate([pv], pvModel(), settings.rates), b = E.estimate([text], e.model, settings.rates);
     const line = (x, approx) => (approx ? "~" : "") + E.fmt(x.chars) + " chars, " + (approx ? "~" : "") + E.fmt(x.credits) + " credits, " + E.usdApprox(x.usd);
-    return { first: "First 10 s: " + line(a, true), full: "Full chunk: " + line(b, false) };
+    return { first: "First 10 s (" + (pvModel() === "eleven_flash_v2_5" ? "Flash" : pvModel()) + "): " + line(a, true), full: "Full chunk: " + line(b, false) };
   }
   const settingsLabel = (m) => (m && m.model ? m.model + ", stability " + (m.stability !== undefined ? stabilityText(m.model, m.stability) : "default") : "");
 
@@ -2310,14 +2316,15 @@
       pill: '<span class="pill ' + st + '" role="status">' + STATUS_LABEL[st] + "</span>",
       body: clampHtml(id, text, "") +
         (st === "error" && rt.errors[key] ? '<div class="errtext" role="alert">' + esc(rt.errors[key]) + "</div>" : "") +
-        '<div class="est-lines"><div class="est-line"><span data-est-a>' + esc(x.first) + '</span><button type="button" class="btn sm ghost" data-preview="' + key + '"' + (busy || previewing ? " disabled" : "") + ' title="Generates only the warm-up phrase and the first sentence. Not saved.">' + icon("play") + (previewing ? "Generating preview..." : "Preview first 10 s") + '</button></div><div class="est-line"><span data-est-b>' + esc(x.full) + "</span></div></div>" +
+        '<div class="est-lines"><div class="est-line"><span data-est-a>' + esc(x.first) + '</span><button type="button" class="btn sm ghost" data-preview="' + key + '"' + (busy || previewing ? " disabled" : "") + ' title="A quick check of the voice and wording, not the final sound. Uses ' + esc(pvModel()) + ' and generates only the warm-up phrase and the first sentence. Not saved.">' + icon("play") + (previewing ? "Generating preview..." : "Preview first 10 s (" + esc(pvName(pvModel())) + ")") + '</button>' +
+          '<button type="button" class="btn sm iconbtn ghost" data-preview-more="' + key + '" aria-haspopup="dialog" aria-label="Change the preview model" title="Change the preview model (previews only)"' + (busy || previewing ? " disabled" : "") + ">" + icon("chevron-down") + '</button></div><div class="est-line"><span data-est-b>' + esc(x.full) + "</span></div></div>" +
         (used ? '<div class="hint used" data-used>Generated with ' + esc(used) + "</div>" : "") +
         (reel ? '<div class="hint rnote" role="status">' + esc(reelAudioNote(reel)) + "</div>" : ""),
       actions: '<button type="button" class="btn sm" data-regen="' + key + '"' + (busy ? " disabled" : "") + ">" + icon("refresh-cw") + (have ? "Regenerate" : "Generate") + "</button>" +
         '<button type="button" class="btn sm iconbtn" data-gen-more="' + key + '" aria-haspopup="dialog" aria-label="Generate with different settings..." title="Generate with different settings..."' + (busy ? " disabled" : "") + ">" + icon("chevron-down") + "</button>" +
         '<button type="button" class="btn sm ghost" data-save="' + key + '"' + (have && !busy ? "" : " disabled") + ">" + icon("hard-drive-download") + "Save to folder</button>",
       after: (url ? '<audio controls preload="none" src="' + url + '" aria-label="Audio for ' + esc(label) + '"></audio>' : "") +
-        (rt.previews[key] ? '<div class="preview-row"><span class="hint">Preview, not saved</span><audio controls src="' + rt.previews[key] + '" aria-label="Preview of ' + esc(label) + '"></audio></div>' : ""),
+        (rt.previews[key] ? '<div class="preview-row"><span class="hint">Quick preview, not the final sound. Not saved</span><audio controls src="' + rt.previews[key] + '" aria-label="Preview of ' + esc(label) + '"></audio></div>' : ""),
     });
   }
 
@@ -2359,12 +2366,14 @@
     on("data-save", () => saveOne(k));
     on("data-preview", () => previewChunk(k));
     on("data-gen-more", () => openRunSettings(k));
+    on("data-preview-more", () => openPreviewModel());
   }
 
   function patchProgress() {
     $$("[data-regen]").forEach((b) => (b.disabled = rt.run.active));
     $$("[data-save]").forEach((b) => (b.disabled = rt.run.active || !meta(parseKey(b.dataset.save))));
     $$("[data-preview]").forEach((b) => (b.disabled = rt.run.active || !!rt.previewBusy));
+    $$("[data-preview-more]").forEach((b) => (b.disabled = rt.run.active || !!rt.previewBusy));
     $$("[data-gen-more]").forEach((b) => (b.disabled = rt.run.active));
     syncGenInfo();
     refreshCounts();
@@ -2804,6 +2813,38 @@
     $("#rs-model", d).focus();
   }
 
+  // "Preview model": which model quick previews use for this page session. Previews only: the main model and the run override never change.
+  function openPreviewModel() {
+    const d = $("#dlg"), opener = document.activeElement;
+    const base = () => (A.MODELS[settings.previewModel] ? settings.previewModel : A.PREVIEW_MODEL);
+    let cur = pvModel();
+    const sample = () => { const c = chunks()[0]; return c ? E.previewText(c.text, E.PREVIEW_CHARS, startPhrase()) : ""; };
+    d.setAttribute("aria-labelledby", "dlg-title");
+    d.innerHTML = '<form method="dialog" class="runform"><h2 id="dlg-title">Preview model</h2>' +
+      '<p class="muted" style="margin:0 0 12px">Used by Preview first 10 s on this page. It never changes your default model or the model of a full run. Flash costs half the credits.</p>' +
+      '<div class="field"><label for="pm-model">Model</label>' + ddHtml("pm-model", "", "") + "</div>" +
+      '<p class="est" id="pm-est" role="status" aria-live="polite" style="margin-top:12px"></p>' +
+      '<div class="row" style="margin-top:14px"><button type="button" class="btn" data-x="cancel">Cancel</button><button type="button" class="btn" data-x="reset">Use Setup preview model</button><button class="btn primary" data-x="ok">Apply</button></div></form>';
+    const est = () => { const x = E.estimate([sample()], cur, settings.rates); $("#pm-est", d).textContent = "A typical preview: " + estimateLine(x, true); };
+    const opts = Object.keys(A.MODELS).map((k) => [k, k + " - " + A.MODELS[k].label]);
+    const dd = ddInit("pm-model", opts, cur, (val) => { cur = val; est(); });
+    const close = () => { d.close(); if (opener && opener.focus && document.contains(opener)) opener.focus(); };
+    $('[data-x="cancel"]', d).onclick = close;
+    $('[data-x="reset"]', d).onclick = () => { cur = base(); dd.set(opts, cur); est(); };
+    $("form", d).onsubmit = (e) => {
+      e.preventDefault();
+      close();
+      rt.previewModel = cur === base() ? null : cur;
+      $$("[data-key]").forEach((el) => patchRow(parseKey(el.dataset.key)));
+      toast("Previews use " + cur + ".");
+    };
+    d.oncancel = (e) => { e.preventDefault(); close(); };
+    d.onclick = (e) => { if (e.target === d) close(); };
+    est();
+    d.showModal();
+    $("#pm-model", d).focus();
+  }
+
   // Warnings link to the place that has the problem: open the tab and focus the card.
   function jumpTo(tg) {
     const [kind, id, what, n] = tg.split(":");
@@ -2843,11 +2884,12 @@
     if (!text) return;
     rt.previewBusy = String(key); patchRow(key);
     try {
-      const ef = eff(), args = { apiKey: settings.apiKey, voiceId: ef.voiceId, model: ef.model, stability: A.snapStability(ef.model, ef.stability), text, n: t.simN };
+      // The preview model (Flash by default), never the main model or the run override; stability is snapped for that model.
+      const ef = eff(), pm = pvModel(), args = { apiKey: settings.apiKey, voiceId: ef.voiceId, model: pm, stability: A.snapStability(pm, ef.stability), text, n: t.simN };
       const blob = DEMO ? await A.simulate(args) : await A.elevenLabs(args);
       if (rt.previews[key]) URL.revokeObjectURL(rt.previews[key]);
       rt.previews[key] = URL.createObjectURL(blob);
-      toast("Preview ready. It used about " + E.fmt(E.estimate([text], eff().model, settings.rates).credits) + " credits and is not saved.");
+      toast("Preview ready (" + (pm === "eleven_flash_v2_5" ? "Flash" : pm) + "). It used about " + E.fmt(E.estimate([text], pm, settings.rates).credits) + " credits. A quick check of the voice and wording, not the final sound; not saved.");
       loadSub(true);
     } catch (e) { toast((e && e.message) || "The preview failed."); }
     rt.previewBusy = null;

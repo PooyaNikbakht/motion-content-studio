@@ -11,6 +11,8 @@
     eleven_multilingual_v2: { label: "Multilingual v2", maxChars: 10000, stabilitySteps: null },
     eleven_flash_v2_5: { label: "Flash v2.5 (fast, half the credits)", maxChars: 40000, stabilitySteps: null },
   };
+  /** Quick previews always use this model (half the credits, 40,000 characters, any stability from 0 to 1). */
+  const PREVIEW_MODEL = "eleven_flash_v2_5";
   const V3_PRESETS = { 0: "Creative", 0.5: "Natural", 1: "Robust" };
 
   /** eleven_v3 only takes 0.0, 0.5 or 1.0. Other models take any value from 0 to 1. */
@@ -175,5 +177,5 @@
     return zip.generateAsync({ type: "blob" });
   }
 
-  window.MBSAudio = { MODELS, V3_PRESETS, snapStability, fileName, reelFileName, REELS_DIR, TtsError, elevenLabs, subscription, simulate, simulatedWav, canPickFolder, ensureWritable, writeFile, writeFileIn, download, buildZip };
+  window.MBSAudio = { MODELS, PREVIEW_MODEL, V3_PRESETS, snapStability, fileName, reelFileName, REELS_DIR, TtsError, elevenLabs, subscription, simulate, simulatedWav, canPickFolder, ensureWritable, writeFile, writeFileIn, download, buildZip };
 })();
