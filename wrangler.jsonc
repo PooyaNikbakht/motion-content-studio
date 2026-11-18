@@ -10,8 +10,9 @@
     // /demo/ serves demo/index.html, /app serves app/index.html.
     "html_handling": "drop-trailing-slash",
     // Only the login gate runs the Worker first. Everything else is served as static files.
+    // /auth/* is the optional Google sign-in (src/worker.js); it answers 404 unless GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and ALLOWED_EMAIL are set.
     // /s/* serves read-only share links without login (src/share.js). /api/* is the storage API (signed-in only). Its handler answers 401 JSON itself, so it never redirects.
-    "run_worker_first": ["/app", "/app/*", "/login", "/logout", "/api/*", "/s/*"]
+    "run_worker_first": ["/app", "/app/*", "/login", "/logout", "/auth/*", "/api/*", "/s/*"]
   },
   // Server storage for /app. The database_id below is a PLACEHOLDER: wrangler dev uses a local D1 (.wrangler/state)
   // and ignores it. At deploy time create the database, then paste its real id here (see README, Deploy).

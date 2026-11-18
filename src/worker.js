@@ -6,7 +6,7 @@
 import { handleApi } from "./api.js";
 import { handleShare } from "./share.js";
 import { scheduled } from "./backup.js";
-import { COOKIE, SESSION_SECONDS, MIN_PASSWORD, MAX_PASSWORD, safeEqual, newCredential, verifyPassword, getAuth, createAuth, replaceAuth, makeToken, isAuthed } from "./auth.js";
+import { COOKIE, SESSION_SECONDS, MIN_PASSWORD, MAX_PASSWORD, safeEqual, newCredential, verifyPassword, getAuth, createAuth, replaceAuth, makeToken, isAuthed, signValue, readSigned, jwtPayload, b64url } from "./auth.js";
 
 export { isAuthed };
 
@@ -19,6 +19,17 @@ const failures = new Map();
 function cookie(value, maxAge, url) {
   const secure = url.protocol === "https:" ? "; Secure" : "";
   return `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
+// Optional Google sign-in: on only when all three are set. Password + recovery key stay the fallback.
+const googleOn = (env) => !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.ALLOWED_EMAIL);
+const OAUTH_COOKIE = "mbs_oauth";
+const OAUTH_SECONDS = 600;
+const GOOGLE_ERROR = "Google sign-in was not allowed.";
+
+function oauthCookie(value, maxAge, url) {
+  const secure = url.protocol === "https:" ? "; Secure" : "";
+  return `${OAUTH_COOKIE}=${value}; Path=/auth/google; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
 function privateHeaders(headers) {
@@ -48,7 +59,7 @@ const FIELDS = {
 const DEV_PASSWORD = "local-dev-password";
 const devEnabled = (env, url) => env.DEV_LOGIN === "1" && (url.hostname === "127.0.0.1" || url.hostname === "localhost");
 
-function loginPage(message, status = 200, extra = {}, mode = "signin", notice = "", dev = false) {
+function loginPage(message, status = 200, extra = {}, mode = "signin", notice = "", dev = false, google = false) {
   const m = MODES[mode];
   const fields = m.fields.map((f) => (f === m.fields[0] ? FIELDS[f].replace("<input ", "<input autofocus ") : FIELDS[f])).join("\n    ");
   const links = mode === "signin" ? '<a class="back" href="/login?mode=forgot">Forgot password?</a> ' : mode === "setup" ? "" : '<a class="back" href="' + (mode === "change" ? "/app" : "/login") + '">Cancel</a> ';
@@ -74,6 +85,10 @@ function loginPage(message, status = 200, extra = {}, mode = "signin", notice = 
   button { width: 100%; min-height: 44px; margin-top: 16px; border: 0; border-radius: 8px; background: #F59E0B; color: #0B0F19; font: inherit; font-weight: 700; cursor: pointer; }
   button:hover { background: #FBBF24; }
   button.dev { background: transparent; color: #FBBF24; border: 1px dashed #FBBF24; margin-top: 10px; }
+  a.alt { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; border: 1px solid #34425f; border-radius: 8px; color: inherit; text-decoration: none; font-weight: 600; }
+  a.alt:hover { background: #1c2538; }
+  .or { display: flex; align-items: center; gap: 12px; margin: 16px 0 4px; color: #9AA3AF; font-size: .8rem; }
+  .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid #263149; }
   .err { margin-top: 12px; color: #F97066; font-size: .9rem; min-height: 1.3em; }
   .hint { margin-top: 4px; color: #9AA3AF; font-size: .8rem; }
   label:not(:first-child) { margin-top: 14px; }
@@ -87,6 +102,7 @@ function loginPage(message, status = 200, extra = {}, mode = "signin", notice = 
   <h1>${m.title}</h1>
   <p>${m.lead}</p>
   ${notice ? `<div class="ok" role="status">${notice}</div>` : ""}
+  ${google && mode === "signin" ? '<a class="alt" href="/auth/google"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Continue with Google</a><div class="or" role="separator"><span>or</span></div>' : ""}
   <form method="post" action="/login">
     <input type="hidden" name="action" value="${mode}">
     ${fields}
@@ -111,7 +127,7 @@ async function handleLogin(request, env, url) {
   // Per-IP budget on every POST /login (all actions), before any form, hash or D1 work. A missing binding (tests, local) skips it.
   if (env.LOGIN_LIMIT) {
     const { success } = await env.LOGIN_LIMIT.limit({ key: ip });
-    if (!success) return loginPage("Too many attempts. Wait a minute and try again.", 429, { "Retry-After": "60" }, "signin", "", devEnabled(env, url));
+    if (!success) return loginPage("Too many attempts. Wait a minute and try again.", 429, { "Retry-After": "60" }, "signin", "", devEnabled(env, url), googleOn(env));
   }
   const now = Date.now();
   let rec = failures.get(ip);
@@ -130,7 +146,7 @@ async function handleLogin(request, env, url) {
   }
   const mode = MODES[action] ? action : "signin";
   const get = (k) => String(form.get(k) || "");
-  const page = (msg, status, extra) => loginPage(msg, status, extra, mode, "", dev);
+  const page = (msg, status, extra) => loginPage(msg, status, extra, mode, "", dev, googleOn(env));
 
   if (rec && rec.count >= MAX_FAILURES) {
     const wait = Math.ceil((rec.first + WINDOW_MS - now) / 1000);
@@ -184,6 +200,69 @@ async function handleLogin(request, env, url) {
   return redirect("/app", { "Set-Cookie": cookie(await makeToken(env, fresh.epoch), SESSION_SECONDS, url) });
 }
 
+async function googleStart(request, env, url) {
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  if (env.LOGIN_LIMIT && !(await env.LOGIN_LIMIT.limit({ key: ip })).success) {
+    return loginPage("Too many attempts. Wait a minute and try again.", 429, { "Retry-After": "60" }, "signin", "", devEnabled(env, url), true);
+  }
+  const rand = () => b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const state = rand(), nonce = rand(), verifier = rand();
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  const q = new URLSearchParams({
+    client_id: env.GOOGLE_CLIENT_ID, redirect_uri: `${url.origin}/auth/google/callback`, response_type: "code", scope: "openid email",
+    state, nonce, code_challenge: challenge, code_challenge_method: "S256",
+  });
+  const signed = await signValue(env, { s: state, n: nonce, v: verifier, exp: Date.now() + OAUTH_SECONDS * 1000 });
+  return new Response(null, { status: 302, headers: privateHeaders(new Headers({ Location: "https://accounts.google.com/o/oauth2/v2/auth?" + q, "Set-Cookie": oauthCookie(signed, OAUTH_SECONDS, url) })) });
+}
+
+// Every failure looks the same on purpose: no check, token, code or email is revealed or logged.
+async function googleCallback(request, env, url) {
+  const dev = devEnabled(env, url);
+  const deny = (msg = GOOGLE_ERROR, status = 403) => loginPage(msg, status, { "Set-Cookie": oauthCookie("", 0, url) }, "signin", "", dev, true);
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  if (env.LOGIN_LIMIT && !(await env.LOGIN_LIMIT.limit({ key: ip })).success) {
+    return loginPage("Too many attempts. Wait a minute and try again.", 429, { "Retry-After": "60" }, "signin", "", dev, true);
+  }
+  try {
+    const m = new RegExp(`(?:^|;\\s*)${OAUTH_COOKIE}=([^;]+)`).exec(request.headers.get("Cookie") || "");
+    const saved = m && (await readSigned(env, m[1]));
+    const state = url.searchParams.get("state"), code = url.searchParams.get("code");
+    if (!saved || !saved.exp || saved.exp < Date.now() || !state || !code || !(await safeEqual(state, saved.s))) return deny();
+
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: `${url.origin}/auth/google/callback`,
+        grant_type: "authorization_code", code_verifier: saved.v,
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return deny();
+    const claims = jwtPayload((await res.json()).id_token); // received directly from Google over TLS, so no signature check is needed
+    if (!claims) return deny();
+    const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
+    const allowed = String(env.ALLOWED_EMAIL).split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+    const ok = (claims.iss === "https://accounts.google.com" || claims.iss === "accounts.google.com")
+      && claims.aud === env.GOOGLE_CLIENT_ID
+      && typeof claims.exp === "number" && claims.exp * 1000 > Date.now()
+      && typeof claims.nonce === "string" && (await safeEqual(claims.nonce, saved.n))
+      && claims.email_verified === true
+      && !!email && allowed.includes(email);
+    if (!ok) return deny();
+
+    const row = await getAuth(env);
+    if (!row) return deny("Create the password first.", 409);
+    const headers = privateHeaders(new Headers({ Location: "/app" }));
+    headers.append("Set-Cookie", cookie(await makeToken(env, row.epoch), SESSION_SECONDS, url));
+    headers.append("Set-Cookie", oauthCookie("", 0, url));
+    return new Response(null, { status: 303, headers });
+  } catch {
+    return deny();
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -191,7 +270,11 @@ export default {
     if (path === "/api" || path.startsWith("/api/")) return handleApi(request, env, url);
     // Public read-only share links: no login, handled before the auth gate.
     if (path.startsWith("/s/")) return handleShare(request, env, url);
-    const gated = path === "/app" || path.startsWith("/app/") || path === "/login" || path === "/logout";
+    const google = path === "/auth/google" || path === "/auth/google/callback";
+    if (path.startsWith("/auth/") && (!google || !googleOn(env) || request.method !== "GET")) {
+      return new Response("Not found", { status: 404, headers: privateHeaders(new Headers({ "Content-Type": "text/plain; charset=utf-8" })) });
+    }
+    const gated = google || path === "/app" || path.startsWith("/app/") || path === "/login" || path === "/logout";
 
     if (!gated) return env.ASSETS.fetch(request);
 
@@ -201,6 +284,8 @@ export default {
         headers: privateHeaders(new Headers({ "Content-Type": "text/plain; charset=utf-8" })),
       });
     }
+
+    if (google) return path === "/auth/google" ? googleStart(request, env, url) : googleCallback(request, env, url);
 
     if (path === "/logout") {
       return redirect("/", { "Set-Cookie": cookie("", 0, url) });
@@ -218,7 +303,7 @@ export default {
       if (!row) return loginPage("", 200, {}, "setup", "", dev);
       if (mode === "change") return authed ? loginPage("", 200, {}, "change", "", dev) : redirect("/login");
       if (authed) return redirect("/app");
-      return loginPage("", 200, {}, mode === "forgot" ? "forgot" : "signin", "", dev);
+      return loginPage("", 200, {}, mode === "forgot" ? "forgot" : "signin", "", dev, googleOn(env));
     }
 
     // /app and /app/*

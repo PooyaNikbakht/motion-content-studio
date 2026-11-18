@@ -258,3 +258,142 @@ test("dev sign in: stays off when the host is the production route host even wit
   const r = await worker.fetch(new Request("http://motioncontent.pooya.website/login", { headers: { "CF-Connecting-IP": ip() } }), devEnv(m, "1"));
   assert.equal((await r.text()).includes("Dev sign in"), false);
 });
+
+// ---- Optional Google sign-in ----
+const CID = "client-id.apps.googleusercontent.com";
+const gEnv = (o = {}) => { const m = makeEnv(o); Object.assign(m.env, { GOOGLE_CLIENT_ID: CID, GOOGLE_CLIENT_SECRET: "gsecret", ALLOWED_EMAIL: "Me@Example.com, other@example.com" }); return m; };
+const jwt = (c) => "h." + Buffer.from(JSON.stringify(c)).toString("base64url") + ".s";
+const goodClaims = (nonce, o = {}) => ({ iss: "https://accounts.google.com", aud: CID, exp: Math.floor(Date.now() / 1000) + 600, nonce, email: "me@example.com", email_verified: true, ...o });
+const cookieOf = (res, name) => ((res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get("Set-Cookie")]).find((c) => c && c.startsWith(name + "=")) || "").split(";")[0];
+
+async function startG(env, ipAddr = ip()) {
+  const res = await worker.fetch(new Request(ORIGIN + "/auth/google", { headers: { "CF-Connecting-IP": ipAddr } }), withAssets(env));
+  const loc = res.headers.get("Location") ? new URL(res.headers.get("Location")) : null;
+  return { res, loc, tmp: cookieOf(res, "mbs_oauth") };
+}
+/** Runs the callback with a stubbed token endpoint. claims: object or function(nonce); tweak: { state, tmp, status }. */
+async function callbackG(env, claims, tweak = {}) {
+  const { loc, tmp } = await startG(env);
+  const realFetch = globalThis.fetch;
+  let sent;
+  globalThis.fetch = async (u, init) => {
+    sent = { u: String(u), body: new URLSearchParams(init.body) };
+    if (tweak.status) return new Response("{}", { status: tweak.status });
+    return new Response(JSON.stringify({ id_token: jwt(typeof claims === "function" ? claims(loc.searchParams.get("nonce")) : claims) }));
+  };
+  try {
+    const q = new URLSearchParams({ code: "abc", state: "state" in tweak ? tweak.state : loc.searchParams.get("state") });
+    const h = { "CF-Connecting-IP": ip() };
+    const c = "tmp" in tweak ? tweak.tmp : tmp;
+    if (c) h.Cookie = c;
+    const res = await worker.fetch(new Request(ORIGIN + "/auth/google/callback?" + q, { headers: h }), withAssets(env));
+    return { res, sent, loc };
+  } finally { globalThis.fetch = realFetch; }
+}
+const GENERIC = /Google sign-in was not allowed\./;
+
+test("google: off by default, button hidden, routes 404", async () => {
+  const m = makeEnv();
+  assert.doesNotMatch(await (await get(m.env, "/login")).text(), /Continue with Google/);
+  assert.equal((await get(m.env, "/auth/google")).status, 404);
+  assert.equal((await get(m.env, "/auth/google/callback?code=a&state=b")).status, 404);
+  const partial = makeEnv();
+  partial.env.GOOGLE_CLIENT_ID = CID;
+  assert.equal((await get(partial.env, "/auth/google")).status, 404);
+});
+
+test("google: button on the sign-in page only, not in setup or forgot", async () => {
+  const m = gEnv();
+  assert.match(await (await get(m.env, "/login")).text(), /href="\/auth\/google"[^>]*>[^]*Continue with Google/);
+  assert.doesNotMatch(await (await get(m.env, "/login?mode=forgot")).text(), /Continue with Google/);
+  assert.doesNotMatch(await (await get(gEnv({ noAuth: true }).env, "/login")).text(), /Continue with Google/);
+});
+
+test("google: start redirects with state, nonce, PKCE and the callback URL, and sets a signed short-lived cookie", async () => {
+  const { res, loc } = await startG(gEnv().env);
+  assert.equal(res.status, 302);
+  assert.equal(loc.origin + loc.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
+  assert.equal(loc.searchParams.get("client_id"), CID);
+  assert.equal(loc.searchParams.get("redirect_uri"), ORIGIN + "/auth/google/callback");
+  assert.equal(loc.searchParams.get("scope"), "openid email");
+  assert.equal(loc.searchParams.get("response_type"), "code");
+  assert.equal(loc.searchParams.get("code_challenge_method"), "S256");
+  for (const k of ["state", "nonce", "code_challenge"]) assert.ok(loc.searchParams.get(k).length >= 40, k);
+  assert.match(res.headers.get("Set-Cookie"), /^mbs_oauth=[\w.-]+; Path=\/auth\/google; HttpOnly; SameSite=Lax; Max-Age=600; Secure$/);
+  assert.match(res.headers.get("Cache-Control"), /no-store/);
+});
+
+test("google: callback rejects every bad case with one generic error and no session cookie", async () => {
+  const cases = {
+    "wrong aud": [(n) => goodClaims(n, { aud: "other" })],
+    "wrong iss": [(n) => goodClaims(n, { iss: "https://evil.test" })],
+    expired: [(n) => goodClaims(n, { exp: Math.floor(Date.now() / 1000) - 5 })],
+    "nonce mismatch": [(n) => goodClaims(n + "x")],
+    "unverified email": [(n) => goodClaims(n, { email_verified: false })],
+    "string email_verified": [(n) => goodClaims(n, { email_verified: "true" })],
+    "not allowed": [(n) => goodClaims(n, { email: "stranger@example.com" })],
+    "token endpoint error": [(n) => goodClaims(n), { status: 400 }],
+    "bad state": [(n) => goodClaims(n), { state: "wrong" }],
+    "missing state": [(n) => goodClaims(n), { state: "" }],
+    "missing cookie": [(n) => goodClaims(n), { tmp: "" }],
+    "forged cookie": [(n) => goodClaims(n), { tmp: "mbs_oauth=e30.AAAA" }],
+  };
+  for (const [name, [claims, tweak]] of Object.entries(cases)) {
+    const m = gEnv();
+    const { res } = await callbackG(m.env, claims, tweak);
+    const body = await res.text();
+    assert.equal(res.status, 403, name);
+    assert.match(body, GENERIC, name);
+    assert.doesNotMatch(body, /example\.com|stranger/, name);
+    assert.equal(cookieOf(res, "mbs_session"), "", name);
+  }
+});
+
+test("google: allowed email (case-insensitive list) gets a working session, redirect to /app, temp cookie cleared, code sent with verifier and secret", async () => {
+  const m = gEnv();
+  const { res, sent, loc } = await callbackG(m.env, (n) => goodClaims(n, { iss: "accounts.google.com", email: "ME@example.COM" }));
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get("Location"), "/app");
+  const c = cookieOf(res, "mbs_session");
+  assert.match(c, /^mbs_session=v2\.\d+\.1\./);
+  assert.match(res.headers.getSetCookie().find((x) => x.startsWith("mbs_oauth=")), /Max-Age=0/);
+  assert.equal(sent.u, "https://oauth2.googleapis.com/token");
+  assert.equal(sent.body.get("client_secret"), "gsecret");
+  assert.equal(sent.body.get("code"), "abc");
+  assert.equal(sent.body.get("redirect_uri"), ORIGIN + "/auth/google/callback");
+  const verifier = sent.body.get("code_verifier");
+  const digest = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url");
+  assert.equal(digest, loc.searchParams.get("code_challenge"));
+  assert.notEqual((await get(m.env, "/api/projects", c)).status, 401);
+  assert.equal((await get(m.env, "/api/projects")).status, 401);
+  assert.equal((await get(m.env, "/app", c)).status, 200);
+});
+
+test("google: no auth row means no session and a clear message", async () => {
+  const m = gEnv({ noAuth: true });
+  const { res } = await callbackG(m.env, (n) => goodClaims(n));
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /Create the password first\./);
+  assert.equal(cookieOf(res, "mbs_session"), "");
+  assert.equal(m.authRows.size, 0);
+});
+
+test("google: start and callback are rate limited by LOGIN_LIMIT", async () => {
+  const m = gEnv();
+  const same = "10.9.9.9";
+  for (let i = 0; i < 10; i++) assert.equal((await startG(m.env, same)).res.status, 302);
+  const blocked = await startG(m.env, same);
+  assert.equal(blocked.res.status, 429);
+  assert.equal(blocked.res.headers.get("Retry-After"), "60");
+  const cb = await worker.fetch(new Request(ORIGIN + "/auth/google/callback?code=a&state=b", { headers: { "CF-Connecting-IP": same } }), withAssets(m.env));
+  assert.equal(cb.status, 429);
+});
+
+test("google: password login still works with Google enabled", async () => {
+  const m = gEnv({ noAuth: true });
+  await post(m.env, setupFields());
+  const ok = await post(m.env, { password: PW });
+  assert.equal(ok.status, 303);
+  assert.equal((await get(m.env, "/app", sessionOf(ok))).status, 200);
+  assert.equal((await post(m.env, { password: "wrong wrong wrong" })).status, 401);
+});

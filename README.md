@@ -47,6 +47,7 @@ flowchart LR
 | Share links | Read-only prompt and progress page, expiring, revocable, no login for the viewer |
 | Save bar | Explicit Save with version check and conflict detection (Reload or Overwrite) |
 | First-run password | Created once with a recovery key, PBKDF2 hash in D1, signed cookie |
+| Google sign-in (optional) | "Continue with Google" for one allowed email, server-side OIDC with PKCE; the password stays as fallback. See [docs/deploy.md](docs/deploy.md) |
 | Daily backups | Cron dump of D1 plus incremental media copy, restore script |
 | Demo mode | `/demo` runs the whole flow on fictional content, entirely in your browser |
 

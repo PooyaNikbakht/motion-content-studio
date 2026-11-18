@@ -102,3 +102,24 @@ export async function isAuthed(request, env) {
   try { row = await getAuth(env); } catch { return false; }
   return !!row && String(row.epoch) === parts[2];
 }
+
+// Short-lived signed value for the Google sign-in round trip (state, nonce, PKCE verifier). Same HMAC and secret as the session cookie.
+export async function signValue(env, obj) {
+  const body = b64url(enc.encode(JSON.stringify(obj)));
+  return `${body}.${b64url(await hmac(env.SESSION_SECRET, "g1." + body))}`;
+}
+
+/** The object from signValue, or null when the signature is wrong or it is malformed. */
+export async function readSigned(env, value) {
+  const parts = String(value || "").split(".");
+  if (parts.length !== 2) return null;
+  if (!(await safeEqual(parts[1], b64url(await hmac(env.SESSION_SECRET, "g1." + parts[0]))))) return null;
+  try { return JSON.parse(new TextDecoder().decode(fromB64url(parts[0]))); } catch { return null; }
+}
+
+/** The payload object of a JWT (no signature check: only use for a token received directly from Google over TLS). */
+export function jwtPayload(jwt) {
+  const parts = String(jwt || "").split(".");
+  if (parts.length !== 3) return null;
+  try { return JSON.parse(new TextDecoder().decode(fromB64url(parts[1]))); } catch { return null; }
+}
