@@ -18,7 +18,13 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "motion-books", "database_id": "c4537fdf-e622-4435-9c3c-36df82d33b30", "migrations_dir": "migrations" }
   ],
-  "r2_buckets": [{ "binding": "AUDIO", "bucket_name": "motion-books-audio" }],
+  "r2_buckets": [
+    { "binding": "AUDIO", "bucket_name": "motion-books-audio" },
+    // Private bucket for the daily backup (src/backup.js). Create it before deploy: npx wrangler r2 bucket create motion-books-backups
+    { "binding": "BACKUP", "bucket_name": "motion-books-backups" }
+  ],
+  // Daily backup at 03:17 UTC (Cron Triggers are free on Workers).
+  "triggers": { "crons": ["17 3 * * *"] },
   // Per-IP request budget for /api/*. The handler works without this binding (it just skips the check).
   "ratelimits": [{ "name": "API_LIMIT", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }],
   "observability": { "enabled": true },
@@ -26,7 +32,8 @@
   // Served only on motioncontent.pooya.website, where the zone's DDoS and rate-limit rules apply.
   "workers_dev": false,
   "preview_urls": false,
-  // Caps CPU per request (Workers Paid), so one runaway or abusive request can't run up usage.
-  "limits": { "cpu_ms": 100 },
+  // Caps CPU per invocation (Workers Paid), so one runaway or abusive request can't run up usage. 100 ms is too tight for the daily
+  // backup, which parses and serialises the whole database in one pass (R2 streaming and waiting on D1 do not count as CPU), so it is 1000.
+  "limits": { "cpu_ms": 1000 },
   "routes": [{ "pattern": "motioncontent.pooya.website", "custom_domain": true }]
 }

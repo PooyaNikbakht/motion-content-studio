@@ -2008,6 +2008,7 @@
     syncSubPanel();
     loadSub(false);
     localCopiesRow(p);
+    backupRow(p);
   }
 
   // "Local copies from before server storage": only when the old browser-only database still has projects (/app only).
@@ -2032,6 +2033,43 @@
         const f = $(".footer .linkbtn"); if (f) f.remove();
         toast("Deleted the local copies.");
         sec.remove();
+      });
+    }).catch(() => {});
+  }
+
+  // "Backups": last daily backup (D1 dump and the incremental media copy, see src/backup.js) and a button for one more bounded pass (/app only).
+  function backupRow(p) {
+    if (DEMO) return;
+    const when = (iso) => { const d = new Date(iso); return isNaN(d) ? "unknown" : d.toLocaleString(); };
+    const summary = (r) => {
+      if (!r) return "No backup has run yet. The first one runs at the next daily schedule, or press Run backup now.";
+      const rows = r.db ? r.db.totalRows + " database rows" : "database not saved";
+      const m = r.media ? r.media.copied + " media files copied this run, " + r.media.remaining + " still to copy" + (r.media.failed.length ? ", " + r.media.failed.length + " failed" : "") : "media not checked";
+      return "Last run " + when(r.startedAt) + (r.ok ? "" : " (with errors)") + ": " + rows + ", " + m + ".";
+    };
+    apiFetch("/api/backup/status").then((res) => (res.ok ? res.json() : null)).then((data) => {
+      const page = $(".page", p);
+      if (!data || typeof data.configured !== "boolean" || !page || tab !== "setup" || $("#set-backup", p)) return;
+      const n = $$(".step-setup", p).length + 1, id = "set" + n, title = "Backups";
+      const sec = document.createElement("section");
+      sec.className = "step step-setup"; sec.id = "set-backup"; sec.setAttribute("aria-labelledby", id);
+      sec.innerHTML = '<div class="step-head"><span class="step-chip" aria-hidden="true">' + n + '</span><h3 id="' + id + '">' + title + "</h3>" + cardToggle(id, title, cardOpen(id, true)) + "</div>" +
+        '<div class="card-body" id="' + id + '-body"' + (cardOpen(id, true) ? "" : " hidden") + '><p class="hint" style="margin:0 0 12px" id="bk-sum" role="status" aria-live="polite"></p>' +
+        '<div class="row"><button type="button" class="btn" id="bk-run"' + (data.configured ? "" : " disabled") + ">" + icon("database-backup") + "Run backup now</button></div></div>";
+      page.append(sec);
+      bindCards(sec);
+      icons();
+      const sum = $("#bk-sum", sec), btn = $("#bk-run", sec);
+      sum.textContent = data.configured ? summary(data.lastRun) : "Backups are not set up on this server yet.";
+      btn.addEventListener("click", async () => {
+        btn.disabled = true; sum.textContent = "Running a backup pass...";
+        try {
+          const res = await apiFetch("/api/backup/run", { method: "POST" });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) sum.textContent = res.status === 429 ? "A backup ran a moment ago. Try again in a minute." : "The backup could not run.";
+          else sum.textContent = summary(body.lastRun);
+        } catch { sum.textContent = "The backup could not run."; }
+        btn.disabled = false;
       });
     }).catch(() => {});
   }

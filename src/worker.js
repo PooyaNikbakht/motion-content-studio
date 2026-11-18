@@ -5,6 +5,7 @@
 
 import { handleApi } from "./api.js";
 import { handleShare } from "./share.js";
+import { scheduled } from "./backup.js";
 import { COOKIE, SESSION_SECONDS, MIN_PASSWORD, MAX_PASSWORD, safeEqual, newCredential, verifyPassword, getAuth, createAuth, replaceAuth, makeToken, isAuthed } from "./auth.js";
 
 export { isAuthed };
@@ -220,4 +221,6 @@ export default {
     const res = await env.ASSETS.fetch(request);
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers: privateHeaders(new Headers(res.headers)) });
   },
+  // Daily backup (Cron Trigger in wrangler.jsonc): src/backup.js.
+  scheduled,
 };

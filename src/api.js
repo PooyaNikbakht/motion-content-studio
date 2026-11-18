@@ -4,9 +4,10 @@
 //
 // Every route is guarded in this order: signed in (401 JSON, never a redirect), per-IP rate limit (429),
 // same-origin write (Origin and X-MBS, 403), then content type (415) and size (413) before the body is read.
-// Bindings: DB (D1), AUDIO (R2), API_LIMIT (rate limit, optional).
+// Bindings: DB (D1), AUDIO (R2), BACKUP (R2, backups), API_LIMIT (rate limit, optional).
 
 import { isAuthed } from "./auth.js";
+import { readStatus, runBackup, MIN_GAP_MS } from "./backup.js";
 import { createShare, activeShare, revokeShares, DEFAULT_DAYS } from "./share.js";
 
 // A full AI Director run is saved as the project text. The three caps below add up to 1.8 MiB, under the 2 MB limit of one D1 row.
@@ -483,6 +484,18 @@ export async function handleApi(request, env, url) {
       }
     } else if (kind === "storage") {
       if (parts.length === 1) { const bad = allowed("GET"); if (bad) return bad; return await storageUsage(env); }
+    } else if (kind === "backup") {
+      if (parts.length === 2 && id === "status") {
+        const bad = allowed("GET"); if (bad) return bad;
+        return json({ configured: !!env.BACKUP, lastRun: await readStatus(env) });
+      }
+      if (parts.length === 2 && id === "run") {
+        const bad = allowed("POST"); if (bad) return bad;
+        if (!env.BACKUP) return fail(503, "Backups are not configured.");
+        const last = await readStatus(env);
+        if (last && Date.now() - Date.parse(last.startedAt) < MIN_GAP_MS) return fail(429, "A backup ran a moment ago.", { "Retry-After": "60" });
+        return json({ configured: true, lastRun: await runBackup(env) });
+      }
     } else if (kind === "settings") {
       if (parts.length === 2 && id === "director-prompt") {
         const bad = allowed("GET", "PUT"); if (bad) return bad;

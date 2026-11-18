@@ -162,9 +162,9 @@ The UI, File System Access saving and real ElevenLabs calls are checked manually
 
 ## Deploy (Cloudflare Workers)
 
-**Deploy stage only: none of this has been run.** `wrangler.jsonc` also binds D1 (`DB`), R2 (`AUDIO`, bucket `motion-books-audio`) and a rate limit (`API_LIMIT`), and runs the Worker first for `/api/*`.
+**Deploy stage only: none of this has been run.** `wrangler.jsonc` also binds D1 (`DB`), R2 (`AUDIO`, bucket `motion-books-audio`; `BACKUP`, bucket `motion-books-backups`), a daily Cron Trigger and a rate limit (`API_LIMIT`), and runs the Worker first for `/api/*`.
 
-Config is in `wrangler.jsonc`: static assets from `public/`, the Worker runs first only for `/app*`, `/login` and `/logout`, `workers_dev` is off, `cpu_ms` is 100, and the only route is the custom domain `motioncontent.pooya.website` (zone `pooya.website`).
+Config is in `wrangler.jsonc`: static assets from `public/`, the Worker runs first only for `/app*`, `/login` and `/logout`, `workers_dev` is off, `cpu_ms` is 1000 (the daily backup parses the whole database in one pass, so 100 was too tight), and the only route is the custom domain `motioncontent.pooya.website` (zone `pooya.website`).
 
 1. `npx wrangler login` (once).
 2. Set the secrets:
@@ -177,16 +177,39 @@ Config is in `wrangler.jsonc`: static assets from `public/`, the Worker runs fir
    ```bash
    npx wrangler d1 create motion-books          # copy the printed database_id into wrangler.jsonc
    npx wrangler r2 bucket create motion-books-audio
+   npx wrangler r2 bucket create motion-books-backups   # private, used by the daily backup
    npm run db:migrate:remote                    # applies every file in migrations/ remotely (0001_init.sql, 0002_media.sql, 0003_shares.sql, 0004_settings.sql, 0005_auth.sql)
    ```
 4. `npm run deploy`.
 5. Add a Cloudflare rate-limiting rule for `POST /login` on the zone.
 6. Checklist: confirm `DEV_LOGIN` is not set anywhere in the deployed Worker (`npx wrangler secret list` must not show it, and it must not be in `wrangler.jsonc` vars). It is a local-only shortcut; it also refuses non-local hosts, but keep it out of production anyway.
 
+## Backups
+
+A Cron Trigger (`17 3 * * *`, 03:17 UTC) runs `src/backup.js` inside the Worker once a day. It writes to the private R2 bucket `motion-books-backups` (binding `BACKUP`):
+
+- `db/YYYY-MM-DD.json`: every D1 table (projects, folders, media, shares, settings including the Master Prompt, auth hash and salt, found through `sqlite_master`), the latest migration name and row counts. A rerun on the same day overwrites it. Backups older than 30 days are deleted, but the 7 newest always stay.
+- `media/<key>`: a copy of every object in the audio and media bucket that is not there yet (same key and size). Each run copies at most 40 objects or about 20 seconds, then continues the next day. Nothing is ever deleted from `media/`, so files removed in the app stay recoverable. If a file is replaced under the same key with a different size, the newer version replaces the copy.
+- `status/last-run.json`: time, rows per table, media copied, remaining and failed keys, duration, errors. Setup shows it in the Backups card (`/app` only) with a Run backup now button (`POST /api/backup/run`, one bounded pass, refused within a minute of the last one). `GET /api/backup/status` returns the same file. Logs never contain row contents.
+
+**Restore.** First option: D1 Time Travel (`npx wrangler d1 time-travel restore motion-books --timestamp=<ISO time>`), which rewinds the whole database. Second option, from a file backup:
+
+```bash
+npx wrangler r2 object get motion-books-backups/db/2026-11-18.json --file .local/db-2026-11-18.json --remote
+node scripts/restore-db-from-backup.mjs .local/db-2026-11-18.json            # writes .local/restore-2026-11-18.sql (git-ignored), prints counts only
+npx wrangler d1 execute motion-books --remote --file .local/restore-2026-11-18.sql
+```
+
+The SQL uses `INSERT OR REPLACE`; add `--wipe` to empty each table first. Run the migrations first on a fresh database. D1 limits one statement to about 100 KB, so a project with a very large text may need Time Travel instead. Media comes back by copying `media/<key>` to the same key in `motion-books-audio` (`wrangler r2 object get` then `put`).
+
+**Cost.** The cron, the Worker run and the R2 operations stay inside the free Workers and R2 allowances at this size. The media backup roughly doubles stored media and shares the 10 GB R2 free storage with the app files. The first pass copies 40 objects per day, so a large bucket takes several days to catch up. On the Workers Free plan a pass is also limited to 50 subrequests, which stops it after about a dozen objects; the next run continues.
+
 ## Project layout
 
 ```
 src/worker.js            login, logout, session cookie, gate for /app, routes /api/*
+src/backup.js            daily backup (Cron Trigger): D1 dump, retention, incremental media copy, status
+scripts/restore-db-from-backup.mjs   turns a db/ backup into SQL for wrangler d1 execute
 src/share.js             read-only share links (public /s/:token and the token helpers)
 src/api.js               /api handlers: D1 projects and folders, R2 audio, guards
 migrations/              D1 schema (0001_init.sql, 0002_media.sql, 0003_shares.sql, 0004_settings.sql, 0005_auth.sql)
@@ -205,4 +228,4 @@ CDN libraries are pinned with integrity hashes: Tailwind browser build 4.1.11 (j
 
 ## Cache busting
 
-`public/app/index.html` and `public/demo/index.html` load the scripts and stylesheet with a version query string (`?v=20261121s`). Bump it in both files whenever you change anything under `public/static/`, so browsers do not keep serving an old `ui.js` or `parser.js` (an old cached copy shows 0 reels after Load sample).
+`public/app/index.html` and `public/demo/index.html` load the scripts and stylesheet with a version query string (`?v=20261121t`). Bump it in both files whenever you change anything under `public/static/`, so browsers do not keep serving an old `ui.js` or `parser.js` (an old cached copy shows 0 reels after Load sample).
