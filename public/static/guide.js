@@ -25,7 +25,7 @@
           "Eleven v4 is the default for all real narration, Persian and English (1 credit per character, 10,000 character limit). Quick previews (Preview first 10 s) use the separate Preview model setting, Flash v2.5 by default (half the credits), a quick check of the voice and wording, not the final sound. You can change it in Setup or per page next to the preview button. Eleven v3 is the previous-generation alternative (audio tags, 5,000 character limit).",
           "Eleven Flash v2.5: the default Preview model (about 50% lower cost). You can still pick it as the model for a full run.",
           "Multilingual v2: alternative for longer, ultra-stable narration blocks.",
-          "Our Master Prompt slices audio into about 800 to 900 character chunks (under 1,000 characters) for maximum voice stability, well below each model's hard API cap (5,000 for v3, 10,000 for v4 and Multilingual v2, 40,000 for Flash v2.5). Chunks over the cap of the chosen model are flagged.",
+          "Our Master Prompt slices audio into about 2,000 to 2,500 character chunks, each ending at a paragraph break, so the narration stays continuous with few joins and a single chunk is cheap to redo, well below each model's hard API cap (5,000 for v3, 10,000 for v4 and Multilingual v2, 40,000 for Flash v2.5). Chunks over the cap of the chosen model are flagged.",
         ],
         demo: "In the demo nothing is sent anywhere: the director and the audio are simulated, so no keys are needed and the Master Prompt shown is a short fictional sample.",
       },

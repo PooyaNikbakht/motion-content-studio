@@ -30,7 +30,7 @@ test("guide suggestions: model advice, chunk size, no trim setting, banners, Ken
   assert.match(rec("setup"), /Eleven v3 is the previous-generation alternative/);
   assert.match(rec("setup"), /Eleven Flash v2\.5: the default Preview model/);
   assert.match(rec("setup"), /Multilingual v2: alternative for longer, ultra-stable narration blocks/);
-  assert.match(rec("setup"), /800 to 900 character chunks \(under 1,000 characters\)/);
+  assert.match(rec("setup"), /2,000 to 2,500 character chunks, each ending at a paragraph break/);
   assert.ok(!/warm-up/i.test(JSON.stringify(G.GUIDE)), "the warm-up feature is gone");
   assert.ok(!/auto-?trim|built-in trim/i.test(JSON.stringify(G.GUIDE)), "the app has no trim setting, so the guide must not promise one");
   assert.match(rec("board"), /2 to 4 word English title banners/);
